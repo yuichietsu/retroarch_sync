@@ -4,6 +4,10 @@ namespace Menrui;
 
 class AdbSync
 {
+    private const IDX_PATH = 0;
+    private const IDX_FILE = 1;
+    private const IDX_HASH = 2;
+
     public bool $verbose = false;
     public bool $debug   = false;
 
@@ -98,33 +102,65 @@ class AdbSync
         }
     }
 
+    private function syncFiles(array $sData, string $dstPath, $dir): void
+    {
+        foreach ($sData as $data) {
+            [$src, $file] = $data;
+            $dst = "$dstPath/$dir/$file";
+            $dstDir = dirname($dst);
+            if ($dstDir !== "$dstPath/$dir") {
+                $this->mkdir($dstDir);
+            }
+            $this->push($src, $dst);
+            $this->println("[PUSH] $file");
+        }
+    }
+
+    private function convFileHash(array $data): array
+    {
+        $map = [];
+        foreach ($data as $item) {
+            $map[$item[self::IDX_FILE]] = $item[self::IDX_HASH];
+        }
+        return $map;
+    }
+
     private function syncCore(
-        string $srcPath,
         string $dstPath,
         string $dir,
         array $srcList,
         array $dstList,
     ): void {
-        foreach ($srcList as $key => $data) {
-            [$sPath, $sHash] = $data;
+        foreach ($srcList as $key => $sData) {
             if (array_key_exists($key, $dstList)) {
-                [$dPath, $dHash] = $dstList[$key];
-                if ($sHash === $dHash) {
+                $dData = $dstList[$key];
+                $same  = count($sData) === count($dData);
+                if ($same) {
+                    $sHash = $this->convFileHash($sData);
+                    $dHash = $this->convFileHash($dData);
+                    foreach ($sHash as $k => $v) {
+                        if ($v !== $dHash[$k]) {
+                            $same = false;
+                            break;
+                        }
+                    }
+                }
+                if ($same) {
                     $this->verbose && $this->println("[SAME] $key");
                 } else {
-                    $this->push($sPath, "$dstPath/$dir");
                     $this->println("[SYNC] $key");
+                    $this->rm("$dstPath/$dir/$key");
+                    $this->syncFiles($sData, $dstPath, $dir);
                 }
             } else {
-                $this->push($sPath, "$dstPath/$dir");
-                $this->println("[PUSH] $key");
+                $this->println("[NEW] $key");
+                $this->syncFiles($sData, $dstPath, $dir);
             }
             unset($dstList[$key]);
         }
         foreach ($dstList as $key => $data) {
-            [$dPath, $dHash] = $data;
-            $this->rm($dPath);
             $this->println("[DEL] $key");
+            $this->rm("$dstPath/$dir/$key");
         }
     }
 
@@ -135,7 +171,7 @@ class AdbSync
     ): void {
         $srcList = $this->listLocal($srcPath, $dir);
         $dstList = $this->listRemote($dstPath, $dir);
-        $this->syncCore($srcPath, $dstPath, $dir, $srcList, $dstList);
+        $this->syncCore($dstPath, $dir, $srcList, $dstList);
     }
 
     private function syncDirRandNum(
@@ -146,12 +182,13 @@ class AdbSync
     ): void {
         $srcList = [];
         $tmpList = $this->listLocal($srcPath, $dir);
-        foreach (array_rand($tmpList, $num) as $key) {
+        $keys    = array_rand($tmpList, min(count($tmpList), $num));
+        foreach (is_array($keys) ? $keys : [$keys] as $key) {
             $srcList[$key] = $tmpList[$key];
         }
         $dstList = $this->listRemote($dstPath, $dir);
         $this->println(sprintf('[RAND] %s files', number_format(count($srcList))));
-        $this->syncCore($srcPath, $dstPath, $dir, $srcList, $dstList);
+        $this->syncCore($dstPath, $dir, $srcList, $dstList);
     }
 
     private function syncDirRandMB(
@@ -167,9 +204,12 @@ class AdbSync
         $tmpKeys = array_keys($tmpList);
         shuffle($tmpKeys);
         foreach ($tmpKeys as $key) {
-            $data          = $tmpList[$key];
-            [$path]        = $data;
-            $size          = filesize($path);
+            $data = $tmpList[$key];
+            $size = 0;
+            foreach ($data as $file) {
+                [$path] = $file;
+                $size   = filesize($path);
+            }
             if (($sum + $size) <= $th) {
                 $srcList[$key] = $data;
                 $sum += $size;
@@ -177,13 +217,26 @@ class AdbSync
         }
         $dstList = $this->listRemote($dstPath, $dir);
         $this->println(sprintf('[RAND] %s bytes', number_format($sum)));
-        $this->syncCore($srcPath, $dstPath, $dir, $srcList, $dstList);
+        $this->syncCore($dstPath, $dir, $srcList, $dstList);
     }
 
+    private function listCore(string $base, array $lines): array
+    {
+        $list = [];
+        foreach ($lines as $line) {
+            $m = [];
+            preg_match('/^([0-9a-f]{32})\\s+(.+)/', $line, $m);
+            $hash = $m[1];
+            $path = $m[2];
+            $file = str_replace($base, '', $path);
+            $key  = preg_replace('#/.+$#u', '', $file);
+            $list[$key][] = [$path, $file, $hash];
+        }
+        return $list;
+    }
 
     private function listLocal(string $srcPath, string $dir): array
     {
-        $srcList = [];
         $lines   = [];
         $base    = "$srcPath/$dir/";
         $cmd     = sprintf('find %s -type f -exec md5sum {} \;', escapeshellarg($base));
@@ -192,20 +245,11 @@ class AdbSync
             fwrite(STDERR, "ERROR: $cmd\n");
             exit(1);
         }
-        foreach ($lines as $line) {
-            $m = [];
-            preg_match('/^([0-9a-f]{32})\\s+(.+)/', $line, $m);
-            $hash = $m[1];
-            $path = $m[2];
-            $file = str_replace($base, '', $path);
-            $srcList[$file] = [$path, $hash];
-        }
-        return $srcList;
+        return $this->listCore($base, $lines);
     }
 
     private function listRemote(string $dstPath, string $dir): array
     {
-        $dstList = [];
         $base    = "$dstPath/$dir/";
         $lines = $this->exec([
             'find',
@@ -213,15 +257,7 @@ class AdbSync
             '-type f',
             '-exec md5sum {} \;'
         ]);
-        foreach ($lines as $line) {
-            $m = [];
-            preg_match('/^([0-9a-f]{32})\\s+(.+)/', $line, $m);
-            $hash = $m[1];
-            $path = $m[2];
-            $file = str_replace($base, '', $path);
-            $dstList[$file] = [$path, $hash];
-        }
-        return $dstList;
+        return $this->listCore($base, $lines);
     }
 
     private function md5Local(string $path): string
