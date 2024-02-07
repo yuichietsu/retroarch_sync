@@ -89,9 +89,10 @@ class AdbSync
                 $syncType = $filters[$dir];
                 if ($syncType === 'sync') {
                     $this->syncDir($srcPath, $dstPath, $dir);
-                } elseif (preg_match('/^rand:?(\\d*)(m?)$/', $syncType, $m)) {
+                } elseif (preg_match('/^rand:?(\\d*)([mg]?)$/', $syncType, $m)) {
                     if ($m[2]) {
-                        $this->syncDirRandMB($srcPath, $dstPath, $dir, $m[1]);
+                        $mb = $m[1] * ($m[2] === 'g' ? 1024 : 1);
+                        $this->syncDirRandMB($srcPath, $dstPath, $dir, $mb);
                     } else {
                         $this->syncDirRandNum($srcPath, $dstPath, $dir, $m[1]);
                     }
