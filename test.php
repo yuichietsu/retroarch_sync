@@ -44,5 +44,6 @@ $sync->sync(
         'snes'       => 'sync',
         'ws'         => 'sync',
         'wsc'        => 'sync',
+        'x68'        => 'rand:1g',
     ],
 );
