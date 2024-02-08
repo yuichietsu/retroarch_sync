@@ -39,11 +39,26 @@ $sync->sync(
         'ngp'        => 'sync',
         'pc98'       => 'rand:1g',
         'pce'        => 'sync',
+        'psp'        => 'rand:1g',
         'sf_turbo'   => 'sync',
         'sms'        => 'sync',
         'snes'       => 'sync',
+        'tosec_psp'  => 'rand:1g',
         'ws'         => 'sync',
         'wsc'        => 'sync',
         'x68'        => 'rand:1g',
+    ],
+);
+
+$sync->sync(
+    '/mnt/d/files/roms/src',
+    '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM/src',
+    [
+        'n64'    => 'rand:1g',
+        'pcecd'  => 'rand:1g',
+        'pcfx'   => 'rand:1g',
+        'psp'    => 'rand:1g',
+        'psx'    => 'rand:1g',
+        'segacd' => 'rand:1g',
     ],
 );
