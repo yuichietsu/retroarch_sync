@@ -55,7 +55,6 @@ $sync->sync(
     '/mnt/d/files/roms/src',
     '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM/src',
     [
-        'n64'    => 'rand:1g',
         'pcecd'  => 'rand:1g',
         'pcfx'   => 'rand:1g',
         'psp'    => 'rand:1g',
