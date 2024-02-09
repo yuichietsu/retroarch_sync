@@ -140,7 +140,7 @@ class AdbSync
                     $sHash = $this->convFileHash($sData);
                     $dHash = $this->convFileHash($dData);
                     foreach ($sHash as $k => $v) {
-                        if ($v !== $dHash[$k]) {
+                        if ($v !== ($dHash[$k] ?? null)) {
                             $same = false;
                             break;
                         }
