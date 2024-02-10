@@ -87,7 +87,7 @@ class AdbSync
                 $this->println("[SCAN] $dir");
                 $this->mkdir("$dstPath/$dir");
                 $syncType = $filters[$dir];
-                if ($syncType === 'sync') {
+                if ($syncType === 'full') {
                     $this->syncDir($srcPath, $dstPath, $dir);
                 } elseif (preg_match('/^rand:?(\\d*)([mg]?)$/', $syncType, $m)) {
                     if ($m[2]) {
