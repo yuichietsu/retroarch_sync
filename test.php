@@ -34,7 +34,7 @@ $sync->sync(
         'msx'        => 'sync',
         'msx2'       => 'sync',
         'n64'        => 'rand:1g',
-        'nds'        => 'sync',
+        'nds'        => 'rand:1g',
         'nes'        => 'sync',
         'ngc'        => 'sync',
         'ngp'        => 'sync',
