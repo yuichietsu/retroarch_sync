@@ -4,9 +4,21 @@ namespace Menrui;
 
 class AdbSync
 {
-    private const IDX_PATH = 0;
     private const IDX_FILE = 1;
     private const IDX_HASH = 2;
+
+    private array $supportedArchives = [
+        'zip' => [
+            'x' => '',
+            'l' => 'unzip -l',
+            'sizeParser' => '/(?<size>\\d+)\\s+(?<num>\\d+)\\s+files?/',
+        ],
+        '7z'  => [
+            'x' => '',
+            'l' => '7z l',
+            'sizeParser' => '/(?<size>\\d+)\\s+\\d+\\s+(?<num>\\d+)\\s+files?/',
+        ],
+    ];
 
     public bool $verbose = false;
     public bool $debug   = false;
@@ -349,19 +361,6 @@ class AdbSync
         return preg_replace('/\\.(zip|7z)$/i', '', $fileName);
     }
 
-    private function checkXRandMode(array $dataList): mixed
-    {
-        if (count($dataList) !== 1) {
-            $error = "ERROR: xrand mode list must be one.\n";
-            foreach ($dataList as $data) {
-                $error .= "{$data[1]}\n";
-            }
-            fwrite(STDERR, $error);
-            exit(1);
-        }
-        return $dataList[0];
-    }
-
     private function isFileType(array $data, string $ext): ?array
     {
         $file = $this->isSingleFile($data);
@@ -376,98 +375,6 @@ class AdbSync
     private function isSingleFile(array $data): ?array
     {
         return count($data) === 1 ? $data[0] : null;
-    }
-
-    private function syncArchive(
-        string $dstPath,
-        string $dir,
-        array $srcList,
-        array $dstList,
-    ): void {
-        foreach ($srcList as $key => $sData) {
-            $srcData = $this->checkXRandMode($sData);
-            $dstKey = $this->trimArchiveExt($key);
-            if (array_key_exists($dstKey, $dstList)) {
-                $dstData = $this->checkXRandMode($dstList[$dstKey]);
-
-                [$sPath, $sFile, $sHash] = $srcData;
-                [$dPath, $dFile]         = $dstData;
-
-                $same   = false;
-                $rFiles = $this->listRemote($dstPath, "$dir/$dstKey", false);
-                foreach ($rFiles as $rFile) {
-                    $rmtFile     = $this->checkXRandMode($rFile);
-                    $rmtFileName = $rmtFile[self::IDX_FILE];
-                    if ($rmtFileName === "hash_$sHash") {
-                        $same = true;
-                        break;
-                    }
-                }
-                if ($same) {
-                    $this->verbose && $this->println("[SAME] $key => $dstKey");
-                } else {
-                    $this->println("[SYNC] $key => $dstKey");
-                    $this->rm("$dstPath/$dir/$dstKey");
-                    $this->syncArchiveFiles($srcData, $dstPath, $dir);
-                }
-            } else {
-                $this->println("[NEW] $key => $dstKey");
-                $this->syncArchiveFiles($srcData, $dstPath, $dir);
-            }
-            unset($dstList[$dstKey]);
-        }
-        foreach ($dstList as $key => $data) {
-            $this->println("[DEL] $key");
-            $this->rm("$dstPath/$dir/$key");
-        }
-    }
-
-    private function syncZip(
-        string $dstPath,
-        string $dir,
-        array $srcList,
-        array $dstList,
-    ): void {
-        foreach ($srcList as $key => $sData) {
-            $sFile = $this->isFileType($sData, '7z');
-            if (!$sFile) {
-                continue;
-            }
-            [$p, $f, $h] = $sFile;
-            $dstKey = $this->trimArchiveExt($key) . "_$h.zip";
-
-            if (array_key_exists($dstKey, $dstList)) {
-                $this->verbose && $this->println("[SAME] $key => $dstKey");
-            } else {
-                $this->println("[NEW] $key => $dstKey");
-                $this->sync7zToZip($sFile, $dstPath, $dir, $dstKey);
-            }
-            unset($dstList[$dstKey]);
-        }
-        foreach ($dstList as $key => $data) {
-            $this->println("[DEL] $key");
-            $this->rm("$dstPath/$dir/$key");
-        }
-    }
-
-    private function syncDir(
-        string $srcPath,
-        string $dstPath,
-        string $dir,
-    ): void {
-        $srcList = $this->listLocal($srcPath, $dir);
-        $dstList = $this->listRemote($dstPath, $dir);
-        $this->syncCore($dstPath, $dir, $srcList, $dstList);
-    }
-
-    private function syncDirZip(
-        string $srcPath,
-        string $dstPath,
-        string $dir,
-    ): void {
-        $srcList = $this->listLocal($srcPath, $dir);
-        $dstList = $this->listRemote($dstPath, $dir, false);
-        $this->syncZip($dstPath, $dir, $srcList, $dstList);
     }
 
     private function filterSrcList(array $srcList, array $options): array
@@ -525,19 +432,6 @@ class AdbSync
         return $this->isSupportedArchive($file);
     }
 
-    private array $supportedArchives = [
-        'zip' => [
-            'x' => '',
-            'l' => 'unzip -l',
-            'sizeParser' => '/(?<size>\\d+)\\s+(?<num>\\d+)\\s+files?/',
-        ],
-        '7z'  => [
-            'x' => '',
-            'l' => '7z l',
-            'sizeParser' => '/(?<size>\\d+)\\s+\\d+\\s+(?<num>\\d+)\\s+files?/',
-        ],
-    ];
-
     private function isSupportedArchive(string $file): bool
     {
         return null !== $this->getSupportedArchiveExtension($file);
@@ -559,96 +453,6 @@ class AdbSync
     {
         $extension = $this->getSupportedArchiveExtension($file);
         return $this->supportedArchives[$extension];
-    }
-
-    private function syncDirRandNum(
-        string $srcPath,
-        string $dstPath,
-        string $dir,
-        int $num,
-    ): void {
-        $srcList = [];
-        $tmpList = $this->listLocal($srcPath, $dir);
-        $keys    = array_rand($tmpList, min(count($tmpList), $num));
-        foreach (is_array($keys) ? $keys : [$keys] as $key) {
-            $srcList[$key] = $tmpList[$key];
-        }
-        $dstList = $this->listRemote($dstPath, $dir);
-        $this->println(sprintf('[RAND] %s files', number_format(count($srcList))));
-        $this->syncCore($dstPath, $dir, $srcList, $dstList);
-    }
-
-    private function syncDirRandMB(
-        string $srcPath,
-        string $dstPath,
-        string $dir,
-        int $mb,
-    ): void {
-        $sum     = 0;
-        $th      = $mb * 1024 * 1024;
-        $srcList = [];
-        $tmpList = $this->listLocal($srcPath, $dir);
-        $tmpKeys = array_keys($tmpList);
-        shuffle($tmpKeys);
-        foreach ($tmpKeys as $key) {
-            $data = $tmpList[$key];
-            $size = 0;
-            foreach ($data as $file) {
-                [$path] = $file;
-                $size   += filesize($path);
-            }
-            if (($sum + $size) <= $th) {
-                $srcList[$key] = $data;
-                $sum += $size;
-            }
-        }
-        $dstList = $this->listRemote($dstPath, $dir);
-        $this->println(sprintf('[RAND] %s bytes', number_format($sum)));
-        $this->syncCore($dstPath, $dir, $srcList, $dstList);
-    }
-
-    private function syncDirXRandNum(
-        string $srcPath,
-        string $dstPath,
-        string $dir,
-        int $num,
-    ): void {
-        $srcList = [];
-        $tmpList = $this->listLocal($srcPath, $dir);
-        $keys    = array_rand($tmpList, min(count($tmpList), $num));
-        foreach (is_array($keys) ? $keys : [$keys] as $key) {
-            $srcList[$key] = $tmpList[$key];
-        }
-        $dstList = $this->listRemote($dstPath, $dir, false);
-        $this->println(sprintf('[RAND] %s files', number_format(count($srcList))));
-        $this->syncArchive($dstPath, $dir, $srcList, $dstList);
-    }
-
-    private function syncDirXRandMB(
-        string $srcPath,
-        string $dstPath,
-        string $dir,
-        int $mb,
-    ): void {
-        $sum     = 0;
-        $th      = $mb * 1024 * 1024;
-        $srcList = [];
-        $tmpList = $this->listLocal($srcPath, $dir);
-        $tmpKeys = array_keys($tmpList);
-        shuffle($tmpKeys);
-        foreach ($tmpKeys as $key) {
-            $data   = $tmpList[$key];
-            $file   = $this->checkXRandMode($data);
-            [$path] = $file;
-            $size   = $this->getSizeInArchive($path);
-            if (($sum + $size) <= $th) {
-                $srcList[$key] = $data;
-                $sum += $size;
-            }
-        }
-        $dstList = $this->listRemote($dstPath, $dir, false);
-        $this->println(sprintf('[RAND] %s bytes', number_format($sum)));
-        $this->syncArchive($dstPath, $dir, $srcList, $dstList);
     }
 
     private function listCore(string $base, array $lines, bool $withHash = true): array
@@ -709,19 +513,5 @@ class AdbSync
             ]);
         }
         return $this->listCore($base, $lines, $withHash);
-    }
-
-    private function md5Local(string $path): string
-    {
-        return md5(file_get_contents($path));
-    }
-
-    private function md5Remote(string $path): string
-    {
-        return implode($this->exec([
-            'md5sum',
-            '-b',
-            $path,
-        ]));
     }
 }
