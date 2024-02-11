@@ -128,14 +128,22 @@ class AdbSync
         }
     }
 
-    private function extractArchive(string $file): array
+    private function checkSupportedArchive(string $file): string
     {
         $m = [];
         if (preg_match('/\\.(zip|7z)$/i', $file, $m)) {
             $ext = strtolower($m[1]);
         } else {
             fwrite(STDERR, "ERROR: not supported extension. $file\n");
+            exit(1);
         }
+        return $ext;
+    }
+
+    private function extractArchive(string $file): array
+    {
+        $ext = $this->checkSupportedArchive($file);
+
         do {
             $rand = md5(mt_rand());
             $dir = $this->tmp . '/___adb_sync/' . $rand;
@@ -147,17 +155,45 @@ class AdbSync
 
         $exe = match ($ext) {
             'zip' => 'unzip',
-            '7z'  => '7z e',
+            '7z'  => '7z l',
         };
 
         $cmd = sprintf('cd %s; %s %s', escapeshellarg($dir), $exe, escapeshellarg($file));
-        exec($cmd, $line, $ret);
+        exec($cmd, $lines, $ret);
         if ($ret !== 0) {
             fwrite(STDERR, "ERROR: $cmd\n");
+            fwrite(STDERR, implode("\n", $lines));
             exit(1);
         }
         $files = glob("$dir/*");
         return [$dir, array_map(fn ($n) => str_replace("$dir/", '', $n), $files)];
+    }
+
+    private function getSizeInArchive(string $file): int
+    {
+        $ext = $this->checkSupportedArchive($file);
+
+        $exe = match ($ext) {
+            'zip' => 'unzip -l',
+            '7z'  => '7z l',
+        };
+        $cmd  = sprintf('%s %s', $exe, escapeshellarg($file));
+        $last = exec($cmd, $lines, $ret);
+        if ($ret !== 0) {
+            fwrite(STDERR, "ERROR: $cmd\n");
+            fwrite(STDERR, implode("\n", $lines));
+            exit(1);
+        }
+        match ($ext) {
+            'zip' => preg_match('/(?<size>\\d+)\\s+(?<num>\\d+)\\s+files?/', $last, $info),
+            '7z'  => preg_match('/(?<size>\\d+)\\s+\\d+\\s+(?<num>\\d+)\\s+files?/', $last, $info),
+        };
+        if (!($info['size'] ?? false)) {
+            fwrite(STDERR, "ERROR: cannot retrieve uncompressed file size.\n");
+            fwrite(STDERR, implode("\n", [$cmd, ...$lines]));
+            exit(1);
+        }
+        return $info['size'];
     }
 
     private function syncArchiveFiles(array $srcData, string $dstPath, string $dir): void
@@ -335,7 +371,7 @@ class AdbSync
             $size = 0;
             foreach ($data as $file) {
                 [$path] = $file;
-                $size   = filesize($path);
+                $size   += filesize($path);
             }
             if (($sum + $size) <= $th) {
                 $srcList[$key] = $data;
@@ -377,20 +413,18 @@ class AdbSync
         $tmpKeys = array_keys($tmpList);
         shuffle($tmpKeys);
         foreach ($tmpKeys as $key) {
-            $data = $tmpList[$key];
-            $size = 0;
-            foreach ($data as $file) {
-                [$path] = $file;
-                $size   = filesize($path);
-            }
+            $data   = $tmpList[$key];
+            $file   = $this->checkXRandMode($data);
+            [$path] = $file;
+            $size   = $this->getSizeInArchive($path);
             if (($sum + $size) <= $th) {
                 $srcList[$key] = $data;
                 $sum += $size;
             }
         }
-        $dstList = $this->listRemote($dstPath, $dir);
+        $dstList = $this->listRemote($dstPath, $dir, false);
         $this->println(sprintf('[RAND] %s bytes', number_format($sum)));
-        $this->syncCore($dstPath, $dir, $srcList, $dstList);
+        $this->syncArchive($dstPath, $dir, $srcList, $dstList);
     }
 
     private function listCore(string $base, array $lines, bool $withHash = true): array
