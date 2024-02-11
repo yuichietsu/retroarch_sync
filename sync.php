@@ -91,8 +91,12 @@ class AdbSync
                 $this->println("[SCAN] $dir");
                 $this->mkdir("$dstPath/$dir");
                 $syncType = $filters[$dir];
-                if ($syncType === 'full') {
-                    $this->syncDir($srcPath, $dstPath, $dir);
+                if (preg_match('/^full:?(.*)$/', $syncType, $m)) {
+                    if ($m[1] === 'zip') {
+                        $this->syncDirZip($srcPath, $dstPath, $dir);
+                    } else {
+                        $this->syncDir($srcPath, $dstPath, $dir);
+                    }
                 } elseif (preg_match('/^rand:?(\\d*)([mg]?)$/', $syncType, $m)) {
                     if ($m[2]) {
                         $mb = $m[1] * ($m[2] === 'g' ? 1024 : 1);
@@ -196,12 +200,43 @@ class AdbSync
         return $info['size'];
     }
 
+    private function sync7zToZip(array $srcData, string $dstPath, string $dir, string $zipFile): void
+    {
+        [$src, $file, $hash] = $srcData;
+        [$eDir, $eFiles]     = $this->extractArchive($src);
+        if (count($eFiles) !== 1) {
+            fwrite(STDERR, "ERROR: if 7z to zip, 7z must have one file.\n");
+            fwrite(STDERR, implode("\n", $eFiles));
+            exit(1);
+        }
+        $eFile = $eFiles[0];
+        $cmd = sprintf(
+            'cd %s; zip -9 %s %s',
+            escapeshellarg($eDir),
+            escapeshellarg($zipFile),
+            escapeshellarg($eFile)
+        );
+        exec($cmd, $lines, $ret);
+        if ($ret !== 0) {
+            fwrite(STDERR, "ERROR: $cmd\n");
+            fwrite(STDERR, implode("\n", $lines));
+            exit(1);
+        }
+        $dst    = "$dstPath/$dir/$zipFile";
+        $dstDir = dirname($dst);
+        if ($dstDir !== "$dstPath/$dir") {
+            $this->mkdir($dstDir);
+        }
+        $this->push("$eDir/$zipFile", $dst);
+        $this->println("[PUSH] $zipFile");
+    }
+
     private function syncArchiveFiles(array $srcData, string $dstPath, string $dir): void
     {
         [$src, $file, $hash] = $srcData;
 
         $dBase = $this->trimArchiveExt($file);
-        [$eDir, $eFiles] = $this->extractArchive($src, $hash);
+        [$eDir, $eFiles] = $this->extractArchive($src);
         $hashFile = "hash_$hash";
         touch("$eDir/$hashFile");
         $eFiles[] = $hashFile;
@@ -282,6 +317,22 @@ class AdbSync
         return $dataList[0];
     }
 
+    private function isFileType(array $data, string $ext): ?array
+    {
+        $file = $this->isSingleFile($data);
+        if (!$file) {
+            return false;
+        }
+        [$path] = $file;
+        $escExt = preg_quote($ext, '/');
+        return preg_match("/\\.{$escExt}\$/", $path) ? $file : null;
+    }
+
+    private function isSingleFile(array $data): ?array
+    {
+        return count($data) === 1 ? $data[0] : null;
+    }
+
     private function syncArchive(
         string $dstPath,
         string $dir,
@@ -326,6 +377,33 @@ class AdbSync
         }
     }
 
+    private function syncZip(
+        string $dstPath,
+        string $dir,
+        array $srcList,
+        array $dstList,
+    ): void {
+        foreach ($srcList as $key => $sData) {
+            $sFile = $this->isFileType($sData, '7z');
+            if (!$sFile) {
+                continue;
+            }
+            [$p, $f, $h] = $sFile;
+            $dstKey = $this->trimArchiveExt($key) . "_$h.zip";
+
+            if (array_key_exists($dstKey, $dstList)) {
+                $this->verbose && $this->println("[SAME] $key => $dstKey");
+            } else {
+                $this->println("[NEW] $key => $dstKey");
+                $this->sync7zToZip($sFile, $dstPath, $dir, $dstKey);
+            }
+            unset($dstList[$dstKey]);
+        }
+        foreach ($dstList as $key => $data) {
+            $this->println("[DEL] $key");
+            $this->rm("$dstPath/$dir/$key");
+        }
+    }
 
     private function syncDir(
         string $srcPath,
@@ -335,6 +413,16 @@ class AdbSync
         $srcList = $this->listLocal($srcPath, $dir);
         $dstList = $this->listRemote($dstPath, $dir);
         $this->syncCore($dstPath, $dir, $srcList, $dstList);
+    }
+
+    private function syncDirZip(
+        string $srcPath,
+        string $dstPath,
+        string $dir,
+    ): void {
+        $srcList = $this->listLocal($srcPath, $dir);
+        $dstList = $this->listRemote($dstPath, $dir, false);
+        $this->syncZip($dstPath, $dir, $srcList, $dstList);
     }
 
     private function syncDirRandNum(
