@@ -305,6 +305,7 @@ class AdbSync
         array $dstList,
         array $options
     ): void {
+        $c = ['n' => 0, 'u' => 0, 'd' => 0, 's' => 0];
         foreach ($srcList as $sKey => $sData) {
             if (($options['zip'] ?? false) && ($sFile = $this->isFileType($sData, '7z'))) {
                 $hash = $sFile[self::IDX_HASH];
@@ -324,22 +325,27 @@ class AdbSync
             if (array_key_exists($dKey, $dstList)) {
                 $dData = $dstList[$dKey];
                 if ($comp($sData, $dData)) {
-                    $this->println("[SAME] $sKey => $dKey");
+                    $this->verbose && $this->println("[SAME] $sKey => $dKey");
+                    $c['s']++;
                 } else {
                     $this->println("[UP] $sKey => $dKey");
                     $this->rm("$dstPath/$dir/$dKey");
                     $sync($sData, $dstPath, $dir, $dKey);
+                    $c['u']++;
                 }
             } else {
                 $this->println("[NEW] $sKey => $dKey");
                 $sync($sData, $dstPath, $dir, $dKey);
+                $c['n']++;
             }
             unset($dstList[$dKey]);
         }
         foreach (array_keys($dstList) as $key) {
             $this->println("[DEL] $key");
             $this->rm("$dstPath/$dir/$key");
+            $c['d']++;
         }
+        $this->println(sprintf('NEW=%d, UP=%d, SAME=%d, DEL=%s', $c['n'], $c['u'], $c['s'], $c['d']));
     }
 
     private function isFileType(array $data, string $ext): ?array
