@@ -77,41 +77,56 @@ class AdbSync
         ]);
     }
 
+    private function parseOptions(string $optionString): array
+    {
+        $options = [];
+        if (preg_match('/^(full|rand):?(.*)$/', $optionString, $m)) {
+            $options['mode'] = $m[1];
+            foreach (explode(',', $m[2]) as $input) {
+                $i = trim($input);
+                if (preg_match('/^\\d+$/', $i)) {
+                    $options['num'] = (int)$i;
+                } elseif (preg_match('/^(\\d+)([gmk])$/', $i, $im)) {
+                    $size = (int)$im[1];
+                    $unit = $im[2];
+                    $options['size'] = match ($unit) {
+                        'g' => $size * 1024 * 1024 * 1024,
+                        'm' => $size * 1024 * 1024,
+                        'k' => $size * 1024,
+                    };
+                } elseif ($i === 'ext') {
+                    $options['ext'] = true;
+                } elseif ($i === 'zip') {
+                    $options['zip'] = true;
+                }
+            }
+        }
+        return $options;
+    }
+
     public function sync(
         string $srcPath,
         string $dstPath,
-        array $filters
+        array $targets
     ): void {
         $dirs = scandir($srcPath);
         foreach ($dirs as $dir) {
             if ($dir === '.' || $dir === '..') {
                 continue;
             }
-            if (array_key_exists($dir, $filters)) {
+            if (array_key_exists($dir, $targets)) {
                 $this->println("[SCAN] $dir");
-                $this->mkdir("$dstPath/$dir");
-                $syncType = $filters[$dir];
-                if (preg_match('/^full:?(.*)$/', $syncType, $m)) {
-                    if ($m[1] === 'zip') {
-                        $this->syncDirZip($srcPath, $dstPath, $dir);
-                    } else {
-                        $this->syncDir($srcPath, $dstPath, $dir);
-                    }
-                } elseif (preg_match('/^rand:?(\\d*)([mg]?)$/', $syncType, $m)) {
-                    if ($m[2]) {
-                        $mb = $m[1] * ($m[2] === 'g' ? 1024 : 1);
-                        $this->syncDirRandMB($srcPath, $dstPath, $dir, $mb);
-                    } else {
-                        $this->syncDirRandNum($srcPath, $dstPath, $dir, $m[1]);
-                    }
-                } elseif (preg_match('/^xrand:?(\\d*)([mg]?)$/', $syncType, $m)) {
-                    if ($m[2]) {
-                        $mb = $m[1] * ($m[2] === 'g' ? 1024 : 1);
-                        $this->syncDirXRandMB($srcPath, $dstPath, $dir, $mb);
-                    } else {
-                        $this->syncDirXRandNum($srcPath, $dstPath, $dir, $m[1]);
-                    }
+                $settings = $targets[$dir];
+                $options  = $this->parseOptions($settings);
+                if (!($options['mode'] ?? false)) {
+                    $this->println("[SKIP] invalid settings : $settings");
+                    continue;
                 }
+                $this->mkdir("$dstPath/$dir");
+                $srcList = $this->listLocal($srcPath, $dir);
+                $srcList = $this->filterSrcList($srcList, $options);
+                $dstList = $this->listRemote($dstPath, $dir);
+                $this->syncCore($dstPath, $dir, $srcList, $dstList, $options);
             } else {
                 $this->verbose && $this->println("[SKIP] $dir");
             }
@@ -175,12 +190,8 @@ class AdbSync
 
     private function getSizeInArchive(string $file): int
     {
-        $ext = $this->checkSupportedArchive($file);
-
-        $exe = match ($ext) {
-            'zip' => 'unzip -l',
-            '7z'  => '7z l',
-        };
+        $arcInfo  = $this->getArchiveInfo($file);
+        $exe  = $arcInfo['l'];
         $cmd  = sprintf('%s %s', $exe, escapeshellarg($file));
         $last = exec($cmd, $lines, $ret);
         if ($ret !== 0) {
@@ -188,10 +199,7 @@ class AdbSync
             fwrite(STDERR, implode("\n", $lines));
             exit(1);
         }
-        match ($ext) {
-            'zip' => preg_match('/(?<size>\\d+)\\s+(?<num>\\d+)\\s+files?/', $last, $info),
-            '7z'  => preg_match('/(?<size>\\d+)\\s+\\d+\\s+(?<num>\\d+)\\s+files?/', $last, $info),
-        };
+        preg_match($arcInfo['sizeParser'], $last, $info);
         if (!($info['size'] ?? false)) {
             fwrite(STDERR, "ERROR: cannot retrieve uncompressed file size.\n");
             fwrite(STDERR, implode("\n", [$cmd, ...$lines]));
@@ -200,10 +208,11 @@ class AdbSync
         return $info['size'];
     }
 
-    private function sync7zToZip(array $srcData, string $dstPath, string $dir, string $zipFile): void
+    private function sync7zToZip(array $sData, string $dstPath, string $dir, string $zipFile): void
     {
-        [$src, $file, $hash] = $srcData;
-        [$eDir, $eFiles]     = $this->extractArchive($src);
+        [$fileInfo]      = $sData;
+        [$src]           = $fileInfo;
+        [$eDir, $eFiles] = $this->extractArchive($src);
         if (count($eFiles) !== 1) {
             fwrite(STDERR, "ERROR: if 7z to zip, 7z must have one file.\n");
             fwrite(STDERR, implode("\n", $eFiles));
@@ -231,9 +240,10 @@ class AdbSync
         $this->println("[PUSH] $zipFile");
     }
 
-    private function syncArchiveFiles(array $srcData, string $dstPath, string $dir): void
+    private function syncArchiveFiles(array $sData, string $dstPath, string $dir): void
     {
-        [$src, $file, $hash] = $srcData;
+        [$sFileInfo]         = $sData;
+        [$src, $file, $hash] = $sFileInfo;
 
         $dBase = $this->trimArchiveExt($file);
         [$eDir, $eFiles] = $this->extractArchive($src);
@@ -260,40 +270,75 @@ class AdbSync
         return $map;
     }
 
+    private function compareDir(array $sData, array $dData): bool
+    {
+        $same  = count($sData) === count($dData);
+        if ($same) {
+            $sHash = $this->convFileHash($sData);
+            $dHash = $this->convFileHash($dData);
+            foreach ($sHash as $k => $v) {
+                if ($v !== ($dHash[$k] ?? null)) {
+                    $same = false;
+                    break;
+                }
+            }
+        }
+        return $same;
+    }
+
+    private function compareArc(array $sData, array $dData): bool
+    {
+        [$sFileInfo] = $sData;
+        $sHash       = $sFileInfo[self::IDX_HASH];
+
+        foreach ($dData as $dFileInfo) {
+            $dHashFile = basename($dFileInfo[self::IDX_FILE]);
+            if ($dHashFile === "hash_$sHash") {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private function syncCore(
         string $dstPath,
         string $dir,
         array $srcList,
         array $dstList,
+        array $options
     ): void {
-        foreach ($srcList as $key => $sData) {
-            if (array_key_exists($key, $dstList)) {
-                $dData = $dstList[$key];
-                $same  = count($sData) === count($dData);
-                if ($same) {
-                    $sHash = $this->convFileHash($sData);
-                    $dHash = $this->convFileHash($dData);
-                    foreach ($sHash as $k => $v) {
-                        if ($v !== ($dHash[$k] ?? null)) {
-                            $same = false;
-                            break;
-                        }
-                    }
-                }
-                if ($same) {
-                    $this->verbose && $this->println("[SAME] $key");
+        foreach ($srcList as $sKey => $sData) {
+            if (($options['zip'] ?? false) && ($sFile = $this->isFileType($sData, '7z'))) {
+                $hash = $sFile[self::IDX_HASH];
+                $dKey = $this->trimArchiveExt($sKey) . "_$hash.zip";
+                $comp = fn() => true;
+                $sync = $this->sync7zToZip(...);
+            } elseif (($options['ext'] ?? false) && $this->isExtractable($sData)) {
+                $dKey = $this->trimArchiveExt($sKey);
+                $comp = $this->compareArc(...);
+                $sync = $this->syncArchiveFiles(...);
+            } else {
+                $dKey = $sKey;
+                $comp = $this->compareDir(...);
+                $sync = $this->syncFiles(...);
+            }
+
+            if (array_key_exists($dKey, $dstList)) {
+                $dData = $dstList[$dKey];
+                if ($comp($sData, $dData)) {
+                    $this->println("[SAME] $sKey => $dKey");
                 } else {
-                    $this->println("[SYNC] $key");
-                    $this->rm("$dstPath/$dir/$key");
-                    $this->syncFiles($sData, $dstPath, $dir);
+                    $this->println("[UP] $sKey => $dKey");
+                    $this->rm("$dstPath/$dir/$dKey");
+                    $sync($sData, $dstPath, $dir, $dKey);
                 }
             } else {
-                $this->println("[NEW] $key");
-                $this->syncFiles($sData, $dstPath, $dir);
+                $this->println("[NEW] $sKey => $dKey");
+                $sync($sData, $dstPath, $dir, $dKey);
             }
-            unset($dstList[$key]);
+            unset($dstList[$dKey]);
         }
-        foreach ($dstList as $key => $data) {
+        foreach (array_keys($dstList) as $key) {
             $this->println("[DEL] $key");
             $this->rm("$dstPath/$dir/$key");
         }
@@ -423,6 +468,97 @@ class AdbSync
         $srcList = $this->listLocal($srcPath, $dir);
         $dstList = $this->listRemote($dstPath, $dir, false);
         $this->syncZip($dstPath, $dir, $srcList, $dstList);
+    }
+
+    private function filterSrcList(array $srcList, array $options): array
+    {
+        if ($options['mode'] === 'full') {
+            return $srcList;
+        }
+
+        if ($num = ($options['num'] ?? false)) {
+            $newList = [];
+            $keys    = array_rand($srcList, min(count($srcList), $num));
+            foreach (is_array($keys) ? $keys : [$keys] as $key) {
+                $newList[$key] = $srcList[$key];
+            }
+            $this->println(sprintf('[RAND] %s files', number_format(count($newList))));
+            return $newList;
+        }
+
+        if ($th = ($options['size'] ?? false)) {
+            $extract = $options['ext'] ?? false;
+            $sum     = 0;
+            $newList = [];
+            $tmpKeys = array_keys($srcList);
+            shuffle($tmpKeys);
+            foreach ($tmpKeys as $key) {
+                $data = $srcList[$key];
+                if ($extract && $this->isExtractable($data)) {
+                    [$fileInfo] = $data;
+                    [$file]     = $fileInfo;
+                    $size   = $this->getSizeInArchive($file);
+                } else {
+                    $size = 0;
+                    foreach ($data as $file) {
+                        [$path] = $file;
+                        $size   += filesize($path);
+                    }
+                }
+                if (($sum + $size) <= $th) {
+                    $newList[$key] = $data;
+                    $sum += $size;
+                }
+            }
+            $this->println(sprintf('[RAND] %s bytes', number_format($sum)));
+            return $newList;
+        }
+    }
+
+    private function isExtractable(array $filesInGame): bool
+    {
+        if (count($filesInGame) !== 1) {
+            return false;
+        }
+        [$fileInfo] = $filesInGame;
+        [$file]     = $fileInfo;
+        return $this->isSupportedArchive($file);
+    }
+
+    private array $supportedArchives = [
+        'zip' => [
+            'x' => '',
+            'l' => 'unzip -l',
+            'sizeParser' => '/(?<size>\\d+)\\s+(?<num>\\d+)\\s+files?/',
+        ],
+        '7z'  => [
+            'x' => '',
+            'l' => '7z l',
+            'sizeParser' => '/(?<size>\\d+)\\s+\\d+\\s+(?<num>\\d+)\\s+files?/',
+        ],
+    ];
+
+    private function isSupportedArchive(string $file): bool
+    {
+        return null !== $this->getSupportedArchiveExtension($file);
+    }
+
+    private function getSupportedArchiveExtension(string $file): ?string
+    {
+        $extensions = implode('|', array_map(
+            fn ($n) => preg_quote($n, '/'),
+            array_keys($this->supportedArchives)
+        ));
+        if (preg_match("/\\.($extensions)$/i", $file, $m)) {
+            return strtolower($m[1]);
+        }
+        return null;
+    }
+
+    private function getArchiveInfo(string $file): array
+    {
+        $extension = $this->getSupportedArchiveExtension($file);
+        return $this->supportedArchives[$extension];
     }
 
     private function syncDirRandNum(
