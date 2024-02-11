@@ -9,12 +9,13 @@ class AdbSync
 
     private array $supportedArchives = [
         'zip' => [
-            'x' => '',
+            'c' => 'zip -9',
+            'x' => 'unzip',
             'l' => 'unzip -l',
             'sizeParser' => '/(?<size>\\d+)\\s+(?<num>\\d+)\\s+files?/',
         ],
         '7z'  => [
-            'x' => '',
+            'x' => '7z e',
             'l' => '7z l',
             'sizeParser' => '/(?<size>\\d+)\\s+\\d+\\s+(?<num>\\d+)\\s+files?/',
         ],
@@ -159,21 +160,8 @@ class AdbSync
         }
     }
 
-    private function checkSupportedArchive(string $file): string
-    {
-        $m = [];
-        if (preg_match('/\\.(zip|7z)$/i', $file, $m)) {
-            $ext = strtolower($m[1]);
-        } else {
-            fwrite(STDERR, "ERROR: not supported extension. $file\n");
-            exit(1);
-        }
-        return $ext;
-    }
-
     private function extractArchive(string $file): array
     {
-        $ext = $this->checkSupportedArchive($file);
 
         do {
             $rand = md5(mt_rand());
@@ -184,12 +172,9 @@ class AdbSync
             exec(sprintf('rm -rf %s', escapeshellarg($dir)));
         }, $dir);
 
-        $exe = match ($ext) {
-            'zip' => 'unzip',
-            '7z'  => '7z e',
-        };
-
-        $cmd = sprintf('cd %s; %s %s', escapeshellarg($dir), $exe, escapeshellarg($file));
+        $arcInfo = $this->getArchiveInfo($file);
+        $exe     = $arcInfo['x'];
+        $cmd     = sprintf('cd %s; %s %s', escapeshellarg($dir), $exe, escapeshellarg($file));
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
             fwrite(STDERR, "ERROR: $cmd\n");
@@ -202,10 +187,10 @@ class AdbSync
 
     private function getSizeInArchive(string $file): int
     {
-        $arcInfo  = $this->getArchiveInfo($file);
-        $exe  = $arcInfo['l'];
-        $cmd  = sprintf('%s %s', $exe, escapeshellarg($file));
-        $last = exec($cmd, $lines, $ret);
+        $arcInfo = $this->getArchiveInfo($file);
+        $exe     = $arcInfo['l'];
+        $cmd     = sprintf('%s %s', $exe, escapeshellarg($file));
+        $last    = exec($cmd, $lines, $ret);
         if ($ret !== 0) {
             fwrite(STDERR, "ERROR: $cmd\n");
             fwrite(STDERR, implode("\n", $lines));
@@ -231,8 +216,9 @@ class AdbSync
             exit(1);
         }
         $eFile = $eFiles[0];
+        $exe = $this->supportedArchives['zip']['c'];
         $cmd = sprintf(
-            'cd %s; zip -9 %s %s',
+            "cd %s; $exe %s %s",
             escapeshellarg($eDir),
             escapeshellarg($zipFile),
             escapeshellarg($eFile)
@@ -257,7 +243,7 @@ class AdbSync
         [$sFileInfo]         = $sData;
         [$src, $file, $hash] = $sFileInfo;
 
-        $dBase = $this->trimArchiveExt($file);
+        $dBase = $this->trimArchiveExtension($file);
         [$eDir, $eFiles] = $this->extractArchive($src);
         $hashFile = "hash_$hash";
         touch("$eDir/$hashFile");
@@ -322,11 +308,11 @@ class AdbSync
         foreach ($srcList as $sKey => $sData) {
             if (($options['zip'] ?? false) && ($sFile = $this->isFileType($sData, '7z'))) {
                 $hash = $sFile[self::IDX_HASH];
-                $dKey = $this->trimArchiveExt($sKey) . "_$hash.zip";
+                $dKey = $this->trimArchiveExtension($sKey) . "_$hash.zip";
                 $comp = fn() => true;
                 $sync = $this->sync7zToZip(...);
             } elseif (($options['ext'] ?? false) && $this->isExtractable($sData)) {
-                $dKey = $this->trimArchiveExt($sKey);
+                $dKey = $this->trimArchiveExtension($sKey);
                 $comp = $this->compareArc(...);
                 $sync = $this->syncArchiveFiles(...);
             } else {
@@ -354,11 +340,6 @@ class AdbSync
             $this->println("[DEL] $key");
             $this->rm("$dstPath/$dir/$key");
         }
-    }
-
-    private function trimArchiveExt(string $fileName): string
-    {
-        return preg_replace('/\\.(zip|7z)$/i', '', $fileName);
     }
 
     private function isFileType(array $data, string $ext): ?array
@@ -439,14 +420,25 @@ class AdbSync
 
     private function getSupportedArchiveExtension(string $file): ?string
     {
-        $extensions = implode('|', array_map(
-            fn ($n) => preg_quote($n, '/'),
-            array_keys($this->supportedArchives)
-        ));
+        $extensions = $this->getSupportedArchiveRE();
         if (preg_match("/\\.($extensions)$/i", $file, $m)) {
             return strtolower($m[1]);
         }
         return null;
+    }
+
+    private function trimArchiveExtension(string $fileName): string
+    {
+        $extensions = $this->getSupportedArchiveRE();
+        return preg_replace("/\\.($extensions)$/i", '', $fileName);
+    }
+
+    private function getSupportedArchiveRE(): string
+    {
+        return implode('|', array_map(
+            fn ($n) => preg_quote($n, '/'),
+            array_keys($this->supportedArchives)
+        ));
     }
 
     private function getArchiveInfo(string $file): array
