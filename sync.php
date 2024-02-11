@@ -155,7 +155,7 @@ class AdbSync
 
         $exe = match ($ext) {
             'zip' => 'unzip',
-            '7z'  => '7z l',
+            '7z'  => '7z e',
         };
 
         $cmd = sprintf('cd %s; %s %s', escapeshellarg($dir), $exe, escapeshellarg($file));
