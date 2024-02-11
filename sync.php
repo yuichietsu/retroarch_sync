@@ -23,13 +23,13 @@ class AdbSync
 
     public bool $verbose = false;
     public bool $debug   = false;
-    public string $tmp;
+    public string $tmpDir;
 
     public function __construct(
         private string $adbPath,
         private string $target,
     ) {
-        $this->tmp = sys_get_temp_dir();
+        $this->tmpDir = sys_get_temp_dir() . '/___adb_sync/';
 
         system(implode(' ', [
             $adbPath,
@@ -162,14 +162,13 @@ class AdbSync
 
     private function extractArchive(string $file): array
     {
-
         do {
             $rand = md5(mt_rand());
-            $dir = $this->tmp . '/___adb_sync/' . $rand;
+            $dir = $this->tmpDir . $rand;
         } while (file_exists($dir));
         mkdir($dir, 0777, true);
         register_shutdown_function(function ($dir) {
-            exec(sprintf('rm -rf %s', escapeshellarg($dir)));
+            is_dir($dir) && exec(sprintf('rm -rf %s', escapeshellarg($dir)));
         }, $dir);
 
         $arcInfo = $this->getArchiveInfo($file);
