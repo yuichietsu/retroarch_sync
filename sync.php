@@ -34,22 +34,31 @@ class AdbSync
         private string $target,
     ) {
         $this->tmpPath = sys_get_temp_dir() . '/___adb_sync';
-
-        system(implode(' ', [
-            $adbPath,
-            'connect',
-            escapeshellarg($target),
-        ]));
+        $this->connect();
     }
 
-    public function println(string $message): void
+    public function println(string|array $messages): void
     {
-        echo "$message\n";
+        foreach (is_string($messages) ? [$messages] : $messages as $message) {
+            echo "$message\n";
+        }
     }
 
-    public function errorln(string $message): void
+    public function errorln(string|array $messages): void
     {
-        fwrite(STDERR, "$message\n");
+        foreach (is_string($messages) ? [$messages] : $messages as $message) {
+            fwrite(STDERR, "$message\n");
+        }
+    }
+
+    public function connect(): void
+    {
+        exec(implode(' ', [$this->adbPath, 'connect', escapeshellarg($this->target), ]), $lines, $ret);
+        if ($ret !== 0) {
+            $this->errorln('ERROR: failed to connect adb server.');
+            $this->errorln($lines);
+            exit(1);
+        }
     }
 
     public function exec(array $args = []): array
@@ -172,7 +181,7 @@ class AdbSync
         ?string $dstPath = null,
     ): void {
         $this->checkPathSettings($srcPath, $dstPath);
-        $dirs = scandir($srcPath);
+        $dirs = scandir($this->srcPath);
         foreach ($dirs as $dir) {
             if ($dir === '.' || $dir === '..') {
                 continue;
@@ -185,10 +194,10 @@ class AdbSync
                     $this->println("[SKIP] invalid settings : $settings");
                     continue;
                 }
-                $this->mkdirRemote("$dstPath/$dir");
-                $srcList = $this->listLocal("$srcPath/$dir");
+                $this->mkdirRemote($this->dstPath . "/$dir");
+                $srcList = $this->listLocal($this->srcPath . "/$dir");
                 $srcList = $this->filterSrcList($srcList, $options);
-                $dstList = $this->listRemote("$dstPath/$dir");
+                $dstList = $this->listRemote($this->dstPath . "/$dir");
                 $this->syncCore($dir, $srcList, $dstList, $options);
             } else {
                 $this->verbose && $this->println("[SKIP] $dir");
