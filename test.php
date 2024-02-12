@@ -44,7 +44,7 @@ $sync->sync(
         'sf_turbo'   => 'full',
         'sms'        => 'full:zip',
         'snes'       => 'full:zip',
-        'tosec_psp'  => 'rand:4g',
+        'tosec_psp'  => 'rand:4g,ext',
         'ws'         => 'full:zip',
         'wsc'        => 'full:zip',
         'x68'        => 'rand:1g',
