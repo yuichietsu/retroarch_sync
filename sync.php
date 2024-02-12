@@ -290,7 +290,7 @@ class AdbSync
     {
         [$sFileInfo]         = $sData;
         $sPath = $sFileInfo[self::IDX_PATH];
-        $sHash = $sFileInfo[self::IDX_HASH];
+        $sHash = $this->getFileHash($sFileInfo);
 
         [$dir, $files] = $this->extractArchive($sPath);
         $hashFile = "hash_$sHash";
@@ -308,11 +308,16 @@ class AdbSync
         $this->rmLocal($dir);
     }
 
+    private function getFileHash(array $fileInfo): string
+    {
+        return $fileInfo[self::IDX_HASH] ?? $this->md5($fileInfo[self::IDX_PATH]);
+    }
+
     private function makeHashMap(array $data): array
     {
         $map = [];
         foreach ($data as $item) {
-            $hash = $item[self::IDX_HASH] ?? $this->md5($item[self::IDX_PATH]);
+            $hash = $this->getFileHash($item);
             $map[$item[self::IDX_FILE]] = $hash;
         }
         return $map;
@@ -337,7 +342,7 @@ class AdbSync
     private function compareArc(array $sData, array $dData): bool
     {
         [$sFileInfo] = $sData;
-        $sHash       = $sFileInfo[self::IDX_HASH];
+        $sHash       = $this->getFileHash($sFileInfo);
 
         foreach ($dData as $dFileInfo) {
             $dHashFile = basename($dFileInfo[self::IDX_FILE]);
