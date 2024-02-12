@@ -119,7 +119,6 @@ class AdbSync
         }
     }
 
-
     public function mkdirRemote(string $dir): array
     {
         $this->checkRemotePath($dir);
@@ -190,10 +189,11 @@ class AdbSync
                     $this->println("[SKIP] invalid settings : $settings");
                     continue;
                 }
+                $withHash = $options['mode'] === 'full';
                 $this->mkdirRemote($this->dstPath . "/$dir");
-                $srcList = $this->listLocal($this->srcPath . "/$dir");
+                $srcList = $this->listLocal($this->srcPath . "/$dir", $withHash);
                 $srcList = $this->filterSrcList($srcList, $options);
-                $dstList = $this->listRemote($this->dstPath . "/$dir");
+                $dstList = $this->listRemote($this->dstPath . "/$dir", $withHash);
                 $this->syncCore($dir, $srcList, $dstList, $options);
             } else {
                 $this->verbose && $this->println("[SKIP] $dir");
@@ -308,11 +308,12 @@ class AdbSync
         $this->rmLocal($dir);
     }
 
-    private function convFileHash(array $data): array
+    private function makeHashMap(array $data): array
     {
         $map = [];
         foreach ($data as $item) {
-            $map[$item[self::IDX_FILE]] = $item[self::IDX_HASH];
+            $hash = $item[self::IDX_HASH] ?? $this->md5($item[self::IDX_PATH]);
+            $map[$item[self::IDX_FILE]] = $hash;
         }
         return $map;
     }
@@ -321,8 +322,8 @@ class AdbSync
     {
         $same  = count($sData) === count($dData);
         if ($same) {
-            $sHash = $this->convFileHash($sData);
-            $dHash = $this->convFileHash($dData);
+            $sHash = $this->makeHashMap($sData);
+            $dHash = $this->makeHashMap($dData);
             foreach ($sHash as $k => $v) {
                 if ($v !== ($dHash[$k] ?? null)) {
                     $same = false;
@@ -557,5 +558,32 @@ class AdbSync
             ]);
         }
         return $this->listCore($scanDir, $lines, $withHash);
+    }
+
+    private function md5(string $path): string
+    {
+        if (str_starts_with($path, $this->srcPath)) {
+            return $this->md5Local($path);
+        }
+
+        if (str_starts_with($path, $this->dstPath)) {
+            return $this->md5Remote($path);
+        }
+
+        $this->errorln('ERROR: File for MD5 is not within srcPath or dstPath.');
+        $this->errorln($path);
+        $this->errorln("srcPath : {$this->srcPath}");
+        $this->errorln("dstPath : {$this->dstPath}");
+        exit(1);
+    }
+
+    private function md5Local(string $path): string
+    {
+        return md5(file_get_contents($path));
+    }
+
+    private function md5Remote(string $path): string
+    {
+        return implode($this->exec(['md5sum', '-b', escapeshellarg($path)]));
     }
 }
