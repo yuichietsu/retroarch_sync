@@ -29,7 +29,7 @@ $sync->sync(
         'jaguar_rom' => 'full',
         'lnx'        => 'full:zip',
         'lyx'        => 'full:zip',
-        'mame'       => 'rand:256m',
+        'mame'       => 'rand:4g',
         'md'         => 'full:zip',
         'msx'        => 'full',
         'msx2'       => 'full',
