@@ -4,6 +4,7 @@ namespace Menrui;
 
 class AdbSync
 {
+    private const IDX_PATH = 0;
     private const IDX_FILE = 1;
     private const IDX_HASH = 2;
 
@@ -23,13 +24,16 @@ class AdbSync
 
     public bool $verbose = false;
     public bool $debug   = false;
-    public string $tmpDir;
+
+    public ?string $srcPath = null;
+    public ?string $dstPath = null;
+    public string $tmpPath;
 
     public function __construct(
         private string $adbPath,
         private string $target,
     ) {
-        $this->tmpDir = sys_get_temp_dir() . '/___adb_sync/';
+        $this->tmpPath = sys_get_temp_dir() . '/___adb_sync';
 
         system(implode(' ', [
             $adbPath,
@@ -41,6 +45,11 @@ class AdbSync
     public function println(string $message): void
     {
         echo "$message\n";
+    }
+
+    public function errorln(string $message): void
+    {
+        fwrite(STDERR, "$message\n");
     }
 
     public function exec(array $args = []): array
@@ -55,34 +64,60 @@ class AdbSync
         return $outputs;
     }
 
-    public function push(string $srcPath, string $dstDir): array
+    private function checkRemotePath(string $path): void
     {
+        if (!str_starts_with($path, $this->dstPath)) {
+            $this->errorln('ERROR: Remote path must be within the base directory to be removed.');
+            $this->errorln($path);
+            $this->errorln("base : {$this->dstPath}");
+            exit(1);
+        }
+    }
+
+    public function push(string $localFile, string $remoteDir): array
+    {
+        $this->checkRemotePath($remoteDir);
         $cmd = sprintf(
             '%s push %s %s',
             $this->adbPath,
-            escapeshellarg($srcPath),
-            escapeshellarg($dstDir),
+            escapeshellarg($localFile),
+            escapeshellarg($remoteDir),
         );
         $this->debug && $this->println($cmd);
         exec($cmd, $outputs, $ret);
         if ($ret !== 0) {
-            fwrite(STDERR, "ERROR: $cmd\n");
+            $this->errorln("ERROR: $cmd");
             exit(1);
         }
         return $outputs;
     }
 
-    public function rm(string $dstPath): array
+    public function rmRemote(string $path): array
     {
-        return $this->exec([
-            'rm',
-            '-rf',
-            escapeshellarg($dstPath),
-        ]);
+        $this->checkRemotePath($path);
+        return $this->exec(['rm', '-rf', escapeshellarg($path)]);
     }
 
-    public function mkdir(string $dir): array
+    private function rmLocal(string $path): void
     {
+        if (
+            str_starts_with($path, $this->tmpPath) ||
+            str_starts_with($path, $this->srcPath)
+        ) {
+            file_exists($path) && exec(sprintf('rm -rf %s', escapeshellarg($path)));
+        } else {
+            $this->errorln('ERROR: Local files must be within the base or tmp directory to be removed.');
+            $this->errorln($path);
+            $this->errorln("base : {$this->srcPath}");
+            $this->errorln("tmp  : {$this->tmpPath}");
+            exit(1);
+        }
+    }
+
+
+    public function mkdirRemote(string $dir): array
+    {
+        $this->checkRemotePath($dir);
         return $this->exec([
             'mkdir',
             '-p',
@@ -117,11 +152,26 @@ class AdbSync
         return $options;
     }
 
+    private function checkPathSettings(?string $srcPath = null, ?string $dstPath = null): void
+    {
+        $srcPath && ($this->srcPath = $srcPath);
+        $dstPath && ($this->dstPath = $dstPath);
+        if (!$this->srcPath) {
+            $this->errorln('ERROR: srcPath is not specified.');
+            exit(1);
+        }
+        if (!$this->dstPath) {
+            $this->errorln('ERROR: dstPath is not specified.');
+            exit(1);
+        }
+    }
+
     public function sync(
-        string $srcPath,
-        string $dstPath,
-        array $targets
+        array $targets,
+        ?string $srcPath = null,
+        ?string $dstPath = null,
     ): void {
+        $this->checkPathSettings($srcPath, $dstPath);
         $dirs = scandir($srcPath);
         foreach ($dirs as $dir) {
             if ($dir === '.' || $dir === '..') {
@@ -135,25 +185,25 @@ class AdbSync
                     $this->println("[SKIP] invalid settings : $settings");
                     continue;
                 }
-                $this->mkdir("$dstPath/$dir");
-                $srcList = $this->listLocal($srcPath, $dir);
+                $this->mkdirRemote("$dstPath/$dir");
+                $srcList = $this->listLocal("$srcPath/$dir");
                 $srcList = $this->filterSrcList($srcList, $options);
-                $dstList = $this->listRemote($dstPath, $dir);
-                $this->syncCore($dstPath, $dir, $srcList, $dstList, $options);
+                $dstList = $this->listRemote("$dstPath/$dir");
+                $this->syncCore($dir, $srcList, $dstList, $options);
             } else {
                 $this->verbose && $this->println("[SKIP] $dir");
             }
         }
     }
 
-    private function syncFiles(array $sData, string $dstPath, $dir): void
+    private function syncFiles(string $topDir, array $sData): void
     {
         foreach ($sData as $data) {
             [$src, $file] = $data;
-            $dst = "$dstPath/$dir/$file";
+            $dst = $this->dstPath . "/$topDir/$file";
             $dstDir = dirname($dst);
-            if ($dstDir !== "$dstPath/$dir") {
-                $this->mkdir($dstDir);
+            if ($dstDir !== $this->dstPath . "/$topDir") {
+                $this->mkdirRemote($dstDir);
             }
             $this->push($src, $dst);
             $this->println("[PUSH] $file");
@@ -164,12 +214,10 @@ class AdbSync
     {
         do {
             $rand = md5(mt_rand());
-            $dir = $this->tmpDir . $rand;
+            $dir = $this->tmpPath . $rand;
         } while (file_exists($dir));
         mkdir($dir, 0777, true);
-        register_shutdown_function(function ($dir) {
-            is_dir($dir) && exec(sprintf('rm -rf %s', escapeshellarg($dir)));
-        }, $dir);
+        register_shutdown_function($this->rmLocal(...), $dir);
 
         $arcInfo = $this->getArchiveInfo($file);
         $exe     = $arcInfo['x'];
@@ -204,58 +252,61 @@ class AdbSync
         return $info['size'];
     }
 
-    private function sync7zToZip(array $sData, string $dstPath, string $dir, string $zipFile): void
+    private function sync7zToZip(string $topDir, array $sData, string $zipFile): void
     {
         [$fileInfo]      = $sData;
         [$src]           = $fileInfo;
-        [$eDir, $eFiles] = $this->extractArchive($src);
-        if (count($eFiles) !== 1) {
-            fwrite(STDERR, "ERROR: if 7z to zip, 7z must have one file.\n");
-            fwrite(STDERR, implode("\n", $eFiles));
+        [$dir, $files] = $this->extractArchive($src);
+        if (count($files) !== 1) {
+            $this->errorln('ERROR: When converting from 7z to zip, 7z must contain only one file.');
+            $this->errorln(implode("\n", $files));
             exit(1);
         }
-        $eFile = $eFiles[0];
+        [$file] = $files;
         $exe = $this->supportedArchives['zip']['c'];
         $cmd = sprintf(
             "cd %s; $exe %s %s",
-            escapeshellarg($eDir),
+            escapeshellarg($dir),
             escapeshellarg($zipFile),
-            escapeshellarg($eFile)
+            escapeshellarg($file)
         );
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
-            fwrite(STDERR, "ERROR: $cmd\n");
-            fwrite(STDERR, implode("\n", $lines));
+            $this->errorln('ERROR: Failed to create a zip file.');
+            $this->errorln($cmd);
+            $this->errorln(implode("\n", $lines));
             exit(1);
         }
-        $dst    = "$dstPath/$dir/$zipFile";
+        $dst    = $this->dstPath . "/$topDir/$zipFile";
         $dstDir = dirname($dst);
-        if ($dstDir !== "$dstPath/$dir") {
-            $this->mkdir($dstDir);
+        if ($dstDir !== $this->dstPath . "/$topDir") {
+            $this->mkdirRemote($dstDir);
         }
-        $this->push("$eDir/$zipFile", $dst);
+        $this->push("$dir/$zipFile", $dst);
         $this->println("[PUSH] $zipFile");
+        $this->rmLocal($dir);
     }
 
-    private function syncArchiveFiles(array $sData, string $dstPath, string $dir): void
+    private function syncArchiveFiles(string $topDir, array $sData, string $dBase): void
     {
         [$sFileInfo]         = $sData;
-        [$src, $file, $hash] = $sFileInfo;
+        $sPath = $sFileInfo[self::IDX_PATH];
+        $sHash = $sFileInfo[self::IDX_HASH];
 
-        $dBase = $this->trimArchiveExtension($file);
-        [$eDir, $eFiles] = $this->extractArchive($src);
-        $hashFile = "hash_$hash";
-        touch("$eDir/$hashFile");
-        $eFiles[] = $hashFile;
-        foreach ($eFiles as $eFile) {
-            $dst = "$dstPath/$dir/$dBase/$eFile";
+        [$dir, $files] = $this->extractArchive($sPath);
+        $hashFile = "hash_$sHash";
+        touch("$dir/$hashFile");
+        $files[] = $hashFile;
+        foreach ($files as $file) {
+            $dst = $this->dstPath . "/$topDir/$dBase/$file";
             $dstDir = dirname($dst);
-            if ($dstDir !== "$dstPath/$dir") {
-                $this->mkdir($dstDir);
+            if ($dstDir !== $this->dstPath . "/$topDir") {
+                $this->mkdirRemote($dstDir);
             }
-            $this->push("$eDir/$eFile", $dst);
-            $this->println("[PUSH] $eFile");
+            $this->push("$dir/$file", $dst);
+            $this->println("[PUSH] $file");
         }
+        $this->rmLocal($dir);
     }
 
     private function convFileHash(array $data): array
@@ -298,8 +349,7 @@ class AdbSync
     }
 
     private function syncCore(
-        string $dstPath,
-        string $dir,
+        string $topDir,
         array $srcList,
         array $dstList,
         array $options
@@ -328,23 +378,23 @@ class AdbSync
                     $c['s']++;
                 } else {
                     $this->println("[UP] $sKey => $dKey");
-                    $this->rm("$dstPath/$dir/$dKey");
-                    $sync($sData, $dstPath, $dir, $dKey);
+                    $this->rmRemote($this->dstPath . "/$topDir/$dKey");
+                    $sync($topDir, $sData, $dKey);
                     $c['u']++;
                 }
             } else {
                 $this->println("[NEW] $sKey => $dKey");
-                $sync($sData, $dstPath, $dir, $dKey);
+                $sync($topDir, $sData, $dKey);
                 $c['n']++;
             }
             unset($dstList[$dKey]);
         }
         foreach (array_keys($dstList) as $key) {
             $this->println("[DEL] $key");
-            $this->rm("$dstPath/$dir/$key");
+            $this->rmRemote($this->dstPath . "/$topDir/$key");
             $c['d']++;
         }
-        $this->println(sprintf('NEW=%d, UP=%d, SAME=%d, DEL=%s', $c['n'], $c['u'], $c['s'], $c['d']));
+        $this->println(sprintf('NEW:%d, UP:%d, SAME:%d, DEL:%s', $c['n'], $c['u'], $c['s'], $c['d']));
     }
 
     private function isFileType(array $data, string $ext): ?array
@@ -455,6 +505,7 @@ class AdbSync
     private function listCore(string $base, array $lines, bool $withHash = true): array
     {
         $list = [];
+        !str_ends_with($base, '/') && ($base .= '/');
         foreach ($lines as $line) {
             $m = [];
             if ($withHash) {
@@ -474,41 +525,38 @@ class AdbSync
         return $list;
     }
 
-    private function listLocal(string $srcPath, string $dir, bool $withHash = true): array
+    private function listLocal(string $scanDir, bool $withHash = true): array
     {
         $lines   = [];
-        $base    = "$srcPath/$dir/";
         if ($withHash) {
-            $cmd = sprintf('find %s -type f -exec md5sum {} \;', escapeshellarg($base));
+            $cmd = sprintf('find %s -type f -exec md5sum {} \;', escapeshellarg($scanDir));
         } else {
-            $cmd = sprintf('find %s -type f', escapeshellarg($base));
+            $cmd = sprintf('find %s -type f', escapeshellarg($scanDir));
         }
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
             fwrite(STDERR, "ERROR: $cmd\n");
             exit(1);
         }
-        return $this->listCore($base, $lines, $withHash);
+        return $this->listCore($scanDir, $lines, $withHash);
     }
 
-    private function listRemote(string $dstPath, string $dir, bool $withHash = true): array
+    private function listRemote(string $scanDir, bool $withHash = true): array
     {
-        $base = "$dstPath/$dir/";
         if ($withHash) {
             $lines = $this->exec([
                 'find',
-                escapeshellarg($base),
+                escapeshellarg($scanDir),
                 '-type f',
                 '-exec md5sum {} \;'
             ]);
         } else {
             $lines = $this->exec([
                 'find',
-                escapeshellarg($base),
-                '-mindepth 1',
-                '-maxdepth 1',
+                escapeshellarg($scanDir),
+                '-type f',
             ]);
         }
-        return $this->listCore($base, $lines, $withHash);
+        return $this->listCore($scanDir, $lines, $withHash);
     }
 }
