@@ -109,16 +109,12 @@ class AdbSync
 
     private function rmLocal(string $path): void
     {
-        if (
-            str_starts_with($path, $this->tmpPath) ||
-            str_starts_with($path, $this->srcPath)
-        ) {
+        if (str_starts_with($path, $this->tmpPath)) {
             file_exists($path) && exec(sprintf('rm -rf %s', escapeshellarg($path)));
         } else {
-            $this->errorln('ERROR: Local files must be within the base or tmp directory to be removed.');
+            $this->errorln('ERROR: Local files must be within the tmp directory to be removed.');
             $this->errorln($path);
-            $this->errorln("base : {$this->srcPath}");
-            $this->errorln("tmp  : {$this->tmpPath}");
+            $this->errorln("tmp : {$this->tmpPath}");
             exit(1);
         }
     }
@@ -266,18 +262,12 @@ class AdbSync
         [$fileInfo]      = $sData;
         [$src]           = $fileInfo;
         [$dir, $files] = $this->extractArchive($src);
-        if (count($files) !== 1) {
-            $this->errorln('ERROR: When converting from 7z to zip, 7z must contain only one file.');
-            $this->errorln(implode("\n", $files));
-            exit(1);
-        }
-        [$file] = $files;
         $exe = $this->supportedArchives['zip']['c'];
         $cmd = sprintf(
             "cd %s; $exe %s %s",
             escapeshellarg($dir),
             escapeshellarg($zipFile),
-            escapeshellarg($file)
+            implode(' ', array_map('escapeshellarg', $files))
         );
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
