@@ -9,9 +9,9 @@ $sync = new \Menrui\AdbSync(
     '192.168.11.44:5555',
 );
 
+$sync->srcPath = '/mnt/d/files/roms/rebuild';
+$sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM';
 $sync->sync(
-    '/mnt/d/files/roms/rebuild',
-    '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM',
     [
         'a26'        => 'full',
         'a52'        => 'full',
@@ -51,9 +51,9 @@ $sync->sync(
     ],
 );
 
+$sync->srcPath = '/mnt/d/files/roms/src';
+$sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM/src';
 $sync->sync(
-    '/mnt/d/files/roms/src',
-    '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM/src',
     [
         'pcecd'  => 'rand:4g,ext',
         'pcfx'   => 'rand:4g,ext',
