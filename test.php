@@ -60,9 +60,9 @@ $sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM/src';
 $sync->sync(
     [
         'pcecd'  => 'rand:4g,ext',
-        'pcfx'   => 'rand:1g,ext',
+        'pcfx'   => 'rand:2g,ext',
         'psp'    => 'rand:2g,ext',
         'psx'    => 'rand:8g,ext,lock',
-        'segacd' => 'rand:1g,ext',
+        'segacd' => 'rand:2g,ext',
     ],
 );
