@@ -8,7 +8,10 @@ $sync = new \Menrui\AdbSync(
     '/usr/bin/adb',
     '192.168.11.44:5555',
 );
-$sync->statesPath = '/storage/emulated/0/RetroArch/states';
+$sync->statesPath = [
+    '/storage/emulated/0/RetroArch/states',
+    '/storage/emulated/0/Android/data/com.swordfish.lemuroid/files/states',
+];
 
 $sync->srcPath = '/mnt/d/files/roms/rebuild';
 $sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM';

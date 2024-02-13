@@ -27,7 +27,7 @@ class AdbSync
 
     public ?string $srcPath = null;
     public ?string $dstPath = null;
-    public ?string $statesPath = null;
+    public ?array $statesPath = null;
     public string $tmpPath;
 
     public ?array $lockedStates = null;
@@ -154,7 +154,7 @@ class AdbSync
                 } elseif ($i === 'zip') {
                     $options['zip'] = true;
                 } elseif (preg_match('/^lock(\\(.*\\))?$/', $i, $im)) {
-                    $options['lock'] = trim($im[1] ?? '*', '()');
+                    $options['lock'] = strtolower(trim($im[1] ?? '*', '()'));
                 } else {
                     $options['etc'][] = trim($i, '"');
                 }
@@ -420,13 +420,18 @@ class AdbSync
         $targetEmu = $options['lock'] ?? false;
         if ($this->statesPath && $targetEmu) {
             if ($this->lockedStates === null) {
-                $list = $this->listRemote($this->statesPath, false);
-                foreach ($list as $files) {
-                    foreach ($files as $file) {
-                        [$emu, $state]      = explode('/', $file[self::IDX_FILE]);
-                        $game               = preg_replace('/\\.state\\d*$/', '', $state);
-                        $locks['*'][$game]  = true;
-                        $locks[$emu][$game] = true;
+                foreach ($this->statesPath as $sPath) {
+                    $list = $this->listRemote($sPath, false);
+                    foreach ($list as $files) {
+                        foreach ($files as $file) {
+                            [$emu, $state] = explode('/', $file[self::IDX_FILE]);
+                            if (preg_match('/^(.+)\\.state\\d*$/', $state, $m)) {
+                                $game               = preg_replace('/\\.([^.]+)$/', '', $m[1]);
+                                $emu                = strtolower($emu);
+                                $locks['*'][$game]  = true;
+                                $locks[$emu][$game] = true;
+                            }
+                        }
                     }
                 }
                 $this->lockedStates = $locks;
