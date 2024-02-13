@@ -132,7 +132,7 @@ class AdbSync
     private function parseOptions(string $optionString): array
     {
         $options = [];
-        if (preg_match('/^(full|rand):?(.*)$/', $optionString, $m)) {
+        if (preg_match('/^(full|rand|filter):?(.*)$/', $optionString, $m)) {
             $options['mode'] = $m[1];
             foreach (explode(',', $m[2]) as $input) {
                 $i = trim($input);
@@ -150,6 +150,8 @@ class AdbSync
                     $options['ext'] = true;
                 } elseif ($i === 'zip') {
                     $options['zip'] = true;
+                } else {
+                    $options['etc'][] = $i;
                 }
             }
         }
@@ -422,6 +424,22 @@ class AdbSync
     {
         if ($options['mode'] === 'full') {
             return $srcList;
+        }
+
+        if ($options['mode'] === 'filter') {
+            $newList = [];
+            $filters = array_map(fn ($n) => strtolower($n), $options['etc'] ?? []);
+            foreach ($srcList as $key => $data) {
+                $lcKey = strtolower($key);
+                foreach ($filters as $filter) {
+                    if (str_contains($lcKey, $filter)) {
+                        $newList[$key] = $data;
+                        break;
+                    }
+                }
+            }
+            $this->println(sprintf('[FILTER] %s files', number_format(count($newList))));
+            return $newList;
         }
 
         if ($num = ($options['num'] ?? false)) {
