@@ -8,6 +8,7 @@ $sync = new \Menrui\AdbSync(
     '/usr/bin/adb',
     '192.168.11.44:5555',
 );
+$sync->statesPath = '/storage/emulated/0/RetroArch/states';
 
 $sync->srcPath = '/mnt/d/files/roms/rebuild';
 $sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM';
@@ -43,7 +44,7 @@ $sync->sync(
         'psp'        => 'rand:1g,ext',
         'sf_turbo'   => 'full',
         'sms'        => 'full:zip',
-        'snes'       => 'full:zip',
+        'snes'       => 'full:zip,lock',
         'tosec_psp'  => 'rand:2g,ext',
         'ws'         => 'full:zip',
         'wsc'        => 'full:zip',
@@ -58,7 +59,7 @@ $sync->sync(
         'pcecd'  => 'rand:4g,ext',
         'pcfx'   => 'rand:1g,ext',
         'psp'    => 'rand:2g,ext',
-        'psx'    => 'rand:8g,ext',
+        'psx'    => 'rand:8g,ext,lock',
         'segacd' => 'rand:1g,ext',
     ],
 );

@@ -27,7 +27,10 @@ class AdbSync
 
     public ?string $srcPath = null;
     public ?string $dstPath = null;
+    public ?string $statesPath = null;
     public string $tmpPath;
+
+    public ?array $lockedStates = null;
 
     public function __construct(
         private string $adbPath,
@@ -132,9 +135,9 @@ class AdbSync
     private function parseOptions(string $optionString): array
     {
         $options = [];
-        if (preg_match('/^(full|rand|filter):?(.*)$/', $optionString, $m)) {
+        if (preg_match('/^(full|rand|filter)(:.*)?$/', $optionString, $m)) {
             $options['mode'] = $m[1];
-            foreach (explode(',', $m[2]) as $input) {
+            foreach (explode(',', trim($m[2] ?? '', ':')) as $input) {
                 $i = trim($input);
                 if (preg_match('/^\\d+$/', $i)) {
                     $options['num'] = (int)$i;
@@ -150,8 +153,10 @@ class AdbSync
                     $options['ext'] = true;
                 } elseif ($i === 'zip') {
                     $options['zip'] = true;
+                } elseif (preg_match('/^lock(\\(.*\\))?$/', $i, $im)) {
+                    $options['lock'] = trim($im[1] ?? '*', '()');
                 } else {
-                    $options['etc'][] = $i;
+                    $options['etc'][] = trim($i, '"');
                 }
             }
         }
@@ -397,11 +402,39 @@ class AdbSync
             unset($dstList[$dKey]);
         }
         foreach (array_keys($dstList) as $key) {
-            $this->println("[DEL] $key");
-            $this->rmRemote($this->dstPath . "/$topDir/$key");
-            $c['d']++;
+            $locks = $this->getLocks($options);
+            if (array_key_exists($this->trimArchiveExtension($key), $locks)) {
+                $this->println("[LOCKED] $key");
+            } else {
+                $this->println("[DEL] $key");
+                $this->rmRemote($this->dstPath . "/$topDir/$key");
+                $c['d']++;
+            }
         }
         $this->println(sprintf('NEW:%d, UP:%d, SAME:%d, DEL:%s', $c['n'], $c['u'], $c['s'], $c['d']));
+    }
+
+    private function getLocks(array $options): array
+    {
+        $locks     = [];
+        $targetEmu = $options['lock'] ?? false;
+        if ($this->statesPath && $targetEmu) {
+            if ($this->lockedStates === null) {
+                $list = $this->listRemote($this->statesPath, false);
+                foreach ($list as $files) {
+                    foreach ($files as $file) {
+                        [$emu, $state]      = explode('/', $file[self::IDX_FILE]);
+                        $game               = preg_replace('/\\.state\\d*$/', '', $state);
+                        $locks['*'][$game]  = true;
+                        $locks[$emu][$game] = true;
+                    }
+                }
+                $this->lockedStates = $locks;
+            } else {
+                $locks = $this->lockedStates;
+            }
+        }
+        return $locks[$targetEmu] ?? [];
     }
 
     private function isFileType(array $data, string $ext): ?array
