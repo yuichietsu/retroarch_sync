@@ -264,16 +264,20 @@ class AdbSync
         return $info['size'];
     }
 
-    private function sync7zToZip(string $topDir, array $sData, string $zipFile): void
+    private function sync7zToZip(string $topDir, array $sData, string $dirName): void
     {
-        [$fileInfo]      = $sData;
-        [$src]           = $fileInfo;
+        [$fileInfo]    = $sData;
+        [$src]         = $fileInfo;
         [$dir, $files] = $this->extractArchive($src);
+        $hash          = $this->getFileHash($fileInfo);
+        $hashFile      = "hash_$hash";
+        touch("$dir/$hashFile");
+
         $exe = $this->supportedArchives['zip']['c'];
         $cmd = sprintf(
-            "cd %s; $exe %s %s",
+            "cd %s; $exe %s.zip %s",
             escapeshellarg($dir),
-            escapeshellarg($zipFile),
+            escapeshellarg($dirName),
             implode(' ', array_map('escapeshellarg', $files))
         );
         exec($cmd, $lines, $ret);
@@ -283,17 +287,24 @@ class AdbSync
             $this->errorln(implode("\n", $lines));
             exit(1);
         }
-        $dst    = $this->dstPath . "/$topDir/$zipFile";
-        $dstDir = dirname($dst);
-        if ($dstDir !== $this->dstPath . "/$topDir") {
-            $this->mkdirRemote($dstDir);
+
+        $files = [
+            "$dirName.zip",
+            $hashFile,
+        ];
+        foreach ($files as $file) {
+            $dst = $this->dstPath . "/$topDir/$dirName/$file";
+            $dstDir = dirname($dst);
+            if ($dstDir !== $this->dstPath . "/$topDir") {
+                $this->mkdirRemote($dstDir);
+            }
+            $this->push("$dir/$file", $dst);
+            $this->println("[PUSH] $file");
         }
-        $this->push("$dir/$zipFile", $dst);
-        $this->println("[PUSH] $zipFile");
         $this->rmLocal($dir);
     }
 
-    private function syncArchiveFiles(string $topDir, array $sData, string $dBase): void
+    private function syncArchiveFiles(string $topDir, array $sData, string $dirName): void
     {
         [$sFileInfo]         = $sData;
         $sPath = $sFileInfo[self::IDX_PATH];
@@ -304,7 +315,7 @@ class AdbSync
         touch("$dir/$hashFile");
         $files[] = $hashFile;
         foreach ($files as $file) {
-            $dst = $this->dstPath . "/$topDir/$dBase/$file";
+            $dst = $this->dstPath . "/$topDir/$dirName/$file";
             $dstDir = dirname($dst);
             if ($dstDir !== $this->dstPath . "/$topDir") {
                 $this->mkdirRemote($dstDir);
@@ -346,7 +357,7 @@ class AdbSync
         return $same;
     }
 
-    private function compareArc(array $sData, array $dData): bool
+    private function compareHashFile(array $sData, array $dData): bool
     {
         [$sFileInfo] = $sData;
         $sHash       = $this->getFileHash($sFileInfo);
@@ -368,14 +379,13 @@ class AdbSync
     ): void {
         $c = ['n' => 0, 'u' => 0, 'd' => 0, 's' => 0];
         foreach ($srcList as $sKey => $sData) {
-            if (($options['zip'] ?? false) && ($sFile = $this->isFileType($sData, '7z'))) {
-                $hash = $sFile[self::IDX_HASH];
-                $dKey = $this->trimArchiveExtension($sKey) . "_$hash.zip";
-                $comp = fn() => true;
+            if (($options['zip'] ?? false) && $this->isFileType($sData, '7z')) {
+                $dKey = $this->trimArchiveExtension($sKey);
+                $comp = $this->compareHashFile(...);
                 $sync = $this->sync7zToZip(...);
             } elseif (($options['ext'] ?? false) && $this->isExtractable($sData)) {
                 $dKey = $this->trimArchiveExtension($sKey);
-                $comp = $this->compareArc(...);
+                $comp = $this->compareHashFile(...);
                 $sync = $this->syncArchiveFiles(...);
             } else {
                 $dKey = $sKey;
