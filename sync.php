@@ -24,8 +24,8 @@ class AdbSync
 
     public bool $verbose = false;
     public bool $debug   = false;
-    public int $retryCount = 3;
-    public int $retrySleep = 30;
+    public int $retryCount = 5;
+    public int $retrySleep = 60;
 
     public ?string $srcPath = null;
     public ?string $dstPath = null;
@@ -86,6 +86,7 @@ class AdbSync
     private function retryExec(string $cmd): array
     {
         for ($retry = 1; $retry <= $this->retryCount; $retry++) {
+            $outputs = [];
             exec($cmd, $outputs, $ret);
             if ($ret === 0) {
                 return $outputs;
