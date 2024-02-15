@@ -25,7 +25,7 @@ class AdbSync
     public bool $verbose = false;
     public bool $debug   = false;
     public int $retryCount = 3;
-    public int $retrySleep = 5;
+    public int $retrySleep = 30;
 
     public ?string $srcPath = null;
     public ?string $dstPath = null;
@@ -91,6 +91,7 @@ class AdbSync
                 return $outputs;
             } else {
                 $this->errorln("ERROR($retry): $cmd");
+                $this->errorln($outputs);
             }
             sleep($this->retrySleep);
         }
