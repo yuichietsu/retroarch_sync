@@ -24,6 +24,8 @@ class AdbSync
 
     public bool $verbose = false;
     public bool $debug   = false;
+    public int $retryCount = 3;
+    public int $retrySleep = 5;
 
     public ?string $srcPath = null;
     public ?string $dstPath = null;
@@ -64,16 +66,11 @@ class AdbSync
         }
     }
 
-    public function exec(array $args = []): array
+    public function execRemote(array $args = []): array
     {
         $cmd = sprintf('%s shell "%s"', $this->adbPath, implode(' ', $args));
         $this->debug && $this->println($cmd);
-        exec($cmd, $outputs, $ret);
-        if ($ret !== 0) {
-            fwrite(STDERR, "ERROR: $cmd\n");
-            exit(1);
-        }
-        return $outputs;
+        return $this->retryExec($cmd);
     }
 
     private function checkRemotePath(string $path): void
@@ -86,6 +83,20 @@ class AdbSync
         }
     }
 
+    private function retryExec(string $cmd): array
+    {
+        for ($retry = 1; $retry <= $this->retryCount; $retry++) {
+            exec($cmd, $outputs, $ret);
+            if ($ret === 0) {
+                return $outputs;
+            } else {
+                $this->errorln("ERROR($retry): $cmd");
+            }
+            sleep($this->retrySleep);
+        }
+        exit(1);
+    }
+
     public function push(string $localFile, string $remoteDir): array
     {
         $this->checkRemotePath($remoteDir);
@@ -96,18 +107,13 @@ class AdbSync
             escapeshellarg($remoteDir),
         );
         $this->debug && $this->println($cmd);
-        exec($cmd, $outputs, $ret);
-        if ($ret !== 0) {
-            $this->errorln("ERROR: $cmd");
-            exit(1);
-        }
-        return $outputs;
+        return $this->retryExec($cmd);
     }
 
     public function rmRemote(string $path): array
     {
         $this->checkRemotePath($path);
-        return $this->exec(['rm', '-rf', escapeshellarg($path)]);
+        return $this->execRemote(['rm', '-rf', escapeshellarg($path)]);
     }
 
     private function rmLocal(string $path): void
@@ -125,7 +131,7 @@ class AdbSync
     public function mkdirRemote(string $dir): array
     {
         $this->checkRemotePath($dir);
-        return $this->exec([
+        return $this->execRemote([
             'mkdir',
             '-p',
             escapeshellarg($dir),
@@ -615,14 +621,14 @@ class AdbSync
     private function listRemote(string $scanDir, bool $withHash = true): array
     {
         if ($withHash) {
-            $lines = $this->exec([
+            $lines = $this->execRemote([
                 'find',
                 escapeshellarg($scanDir),
                 '-type f',
                 '-exec md5sum {} \;'
             ]);
         } else {
-            $lines = $this->exec([
+            $lines = $this->execRemote([
                 'find',
                 escapeshellarg($scanDir),
                 '-type f',
@@ -655,6 +661,6 @@ class AdbSync
 
     private function md5Remote(string $path): string
     {
-        return implode($this->exec(['md5sum', '-b', escapeshellarg($path)]));
+        return implode($this->execRemote(['md5sum', '-b', escapeshellarg($path)]));
     }
 }
