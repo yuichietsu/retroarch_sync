@@ -35,7 +35,7 @@ RetroArchはFire TV Stickで動作させます。
 
 ## 使用方法
 
-使い方の一例を記載する。
+使い方の一例を記載します。
 
 ```php
 $sync = new \Menrui\AdbSync(
