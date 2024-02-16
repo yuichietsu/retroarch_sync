@@ -7,6 +7,11 @@ class AdbSync
     private const IDX_PATH = 0;
     private const IDX_FILE = 1;
     private const IDX_HASH = 2;
+    private const IDX_DATE = 2;
+
+    private const LIST_NONE = 0;
+    private const LIST_HASH = 1;
+    private const LIST_DATE = 2;
 
     private array $supportedArchives = [
         'zip' => [
@@ -32,6 +37,7 @@ class AdbSync
     public ?array $statesPaths = null;
     public string $tmpPath;
 
+    public int $lockDays = 14;
     public ?array $lockedStates = null;
 
     public function __construct(
@@ -211,11 +217,11 @@ class AdbSync
                     $this->println("[SKIP] invalid settings : $settings");
                     continue;
                 }
-                $withHash = $options['mode'] === 'full';
+                $mode = $options['mode'] === 'full' ? self::LIST_HASH : self::LIST_NONE;
                 $this->mkdirRemote($this->dstPath . "/$dir");
-                $srcList = $this->listLocal($this->srcPath . "/$dir", $withHash);
+                $srcList = $this->listLocal($this->srcPath . "/$dir", $mode);
                 $srcList = $this->filterSrcList($srcList, $options);
-                $dstList = $this->listRemote($this->dstPath . "/$dir", $withHash);
+                $dstList = $this->listRemote($this->dstPath . "/$dir", $mode);
                 $this->syncCore($dir, $srcList, $dstList, $options);
             } else {
                 $this->verbose && $this->println("[SKIP] $dir");
@@ -453,11 +459,17 @@ class AdbSync
 
     private function loadLockedStates(): array
     {
+        $th    = time() - $this->lockDays * 3600 * 24;
         $locks = [];
         foreach ($this->statesPaths as $sPath) {
-            $list = $this->listRemote($sPath, false);
+            $list = $this->listRemote($sPath, self::LIST_DATE);
             foreach ($list as $files) {
                 foreach ($files as $file) {
+                    $date = $file[self::IDX_DATE];
+                    if ($date < $th) {
+                        $this->debug && $this->println("[DEBUG] {$file[self::IDX_FILE]} is too old, $date < $th");
+                        continue;
+                    }
                     $dirs = explode('/', $file[self::IDX_FILE]);
                     $state = array_pop($dirs);
                     if (preg_match('/^(.+)\\.state(\\d*|\\.auto)$/', $state, $m)) {
@@ -597,62 +609,80 @@ class AdbSync
         return $this->supportedArchives[$extension];
     }
 
-    private function listCore(string $base, array $lines, bool $withHash = true): array
+    private function listCore(string $base, array $lines, int $mode): array
     {
         $list = [];
         !str_ends_with($base, '/') && ($base .= '/');
         foreach ($lines as $line) {
-            $m = [];
-            if ($withHash) {
-                preg_match('/^([0-9a-f]{32})\\s+(.+)/', $line, $m);
-                $hash = $m[1];
-                $path = $m[2];
-                $file = str_replace($base, '', $path);
-                $key  = preg_replace('#/.+$#u', '', $file);
-                $list[$key][] = [$path, $file, $hash];
-            } else {
-                $path = $line;
-                $file = str_replace($base, '', $path);
-                $key  = preg_replace('#/.+$#u', '', $file);
-                $list[$key][] = [$path, $file];
+            switch ($mode) {
+                case self::LIST_HASH:
+                    $m = [];
+                    preg_match('/^([0-9a-f]{32})\\s+(.+)/', $line, $m);
+                    $hash = $m[1];
+                    $path = $m[2];
+                    $file = str_replace($base, '', $path);
+                    $key  = preg_replace('#/.+$#u', '', $file);
+                    $list[$key][] = [$path, $file, $hash];
+                    break;
+                case self::LIST_DATE:
+                    $m = [];
+                    preg_match('/^(\\d+)\\s+(.+)/', $line, $m);
+                    $date = $m[1];
+                    $path = $m[2];
+                    $file = str_replace($base, '', $path);
+                    $key  = preg_replace('#/.+$#u', '', $file);
+                    $list[$key][] = [$path, $file, $date];
+                    break;
+                case self::LIST_NONE:
+                    $path = $line;
+                    $file = str_replace($base, '', $path);
+                    $key  = preg_replace('#/.+$#u', '', $file);
+                    $list[$key][] = [$path, $file];
+                    break;
             }
         }
         return $list;
     }
 
-    private function listLocal(string $scanDir, bool $withHash = true): array
+    private function listLocal(string $scanDir, int $mode = self::LIST_HASH): array
     {
         $lines   = [];
-        if ($withHash) {
-            $cmd = sprintf('find %s -type f -exec md5sum {} \;', escapeshellarg($scanDir));
-        } else {
-            $cmd = sprintf('find %s -type f', escapeshellarg($scanDir));
-        }
+        $cmd = match ($mode) {
+            self::LIST_NONE => sprintf('find %s -type f', escapeshellarg($scanDir)),
+            self::LIST_HASH => sprintf('find %s -type f -exec md5sum {} \;', escapeshellarg($scanDir)),
+            self::LIST_DATE => sprintf('find %s -type f -exec stat -c "%Y %n" {} \;', escapeshellarg($scanDir)),
+        };
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
             $this->errorln("ERROR: $cmd");
             exit(1);
         }
-        return $this->listCore($scanDir, $lines, $withHash);
+        return $this->listCore($scanDir, $lines, $mode);
     }
 
-    private function listRemote(string $scanDir, bool $withHash = true): array
+    private function listRemote(string $scanDir, int $mode = self::LIST_HASH): array
     {
-        if ($withHash) {
-            $lines = $this->execRemote([
+        $cmd = match ($mode) {
+            self::LIST_NONE => [
+                'find',
+                escapeshellarg($scanDir),
+                '-type f',
+            ],
+            self::LIST_HASH => [
                 'find',
                 escapeshellarg($scanDir),
                 '-type f',
                 '-exec md5sum {} \;'
-            ], 'No such file or directory');
-        } else {
-            $lines = $this->execRemote([
+            ],
+            self::LIST_DATE => [
                 'find',
                 escapeshellarg($scanDir),
                 '-type f',
-            ], 'No such file or directory');
-        }
-        return $this->listCore($scanDir, $lines, $withHash);
+                "-exec stat -c '%Y %n' {} \;",
+            ],
+        };
+        $lines = $this->execRemote($cmd, 'No such file or directory');
+        return $this->listCore($scanDir, $lines, $mode);
     }
 
     private function md5(string $path): string
