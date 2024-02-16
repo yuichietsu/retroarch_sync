@@ -1,6 +1,6 @@
 ## 概要
 
-RetroArchのためにPCからFire TV Stickにゲームを転送するためのスクリプトです。
+RetroArchのためにPCからFire TV Stickにゲームを転送するためのスクリプトです。  
 RetroArchはFire TV Stickで動作させます。
 
 - 手動でゲームをコピーするのは面倒くさい
