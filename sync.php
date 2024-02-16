@@ -29,7 +29,7 @@ class AdbSync
 
     public ?string $srcPath = null;
     public ?string $dstPath = null;
-    public ?array $statesPath = null;
+    public ?array $statesPaths = null;
     public string $tmpPath;
 
     public ?array $lockedStates = null;
@@ -66,11 +66,11 @@ class AdbSync
         }
     }
 
-    public function execRemote(array $args = []): array
+    public function execRemote(array $args = [], ?string $exitCond = null): array
     {
         $cmd = sprintf('%s shell "%s"', $this->adbPath, implode(' ', $args));
         $this->debug && $this->println($cmd);
-        return $this->retryExec($cmd);
+        return $this->retryExec($cmd, $exitCond);
     }
 
     private function checkRemotePath(string $path): void
@@ -83,16 +83,23 @@ class AdbSync
         }
     }
 
-    private function retryExec(string $cmd): array
+    private function retryExec(string $cmd, ?string $exitCond = null): array
     {
         for ($retry = 1; $retry <= $this->retryCount; $retry++) {
             $outputs = [];
-            exec($cmd, $outputs, $ret);
+            exec("$cmd 2>&1", $outputs, $ret);
             if ($ret === 0) {
                 return $outputs;
             } else {
                 $this->errorln("ERROR($retry): $cmd");
                 $this->errorln($outputs);
+                if ($exitCond !== null) {
+                    foreach ($outputs as $output) {
+                        if (str_contains($output, $exitCond)) {
+                            exit(1);
+                        }
+                    }
+                }
             }
             sleep($this->retrySleep);
         }
@@ -434,30 +441,36 @@ class AdbSync
 
     private function getLocks(array $options): array
     {
-        $locks     = [];
-        $targetEmu = $options['lock'] ?? false;
-        if ($this->statesPath && $targetEmu) {
-            if ($this->lockedStates === null) {
-                foreach ($this->statesPath as $sPath) {
-                    $list = $this->listRemote($sPath, false);
-                    foreach ($list as $files) {
-                        foreach ($files as $file) {
-                            [$emu, $state] = explode('/', $file[self::IDX_FILE]);
-                            if (preg_match('/^(.+)\\.state\\d*$/', $state, $m)) {
-                                $game               = preg_replace('/\\.([^.]+)$/', '', $m[1]);
-                                $emu                = strtolower($emu);
-                                $locks['*'][$game]  = true;
-                                $locks[$emu][$game] = true;
-                            }
-                        }
+        $statesDir = $options['lock'] ?? false;
+        if (!$this->statesPaths || !$statesDir) {
+            return [];
+        }
+        if ($this->lockedStates === null) {
+            $this->lockedStates = $this->loadLockedStates();
+        }
+        return $this->lockedStates[$statesDir] ?? [];
+    }
+
+    private function loadLockedStates(): array
+    {
+        $locks = [];
+        foreach ($this->statesPaths as $sPath) {
+            $list = $this->listRemote($sPath, false);
+            foreach ($list as $files) {
+                foreach ($files as $file) {
+                    $dirs = explode('/', $file[self::IDX_FILE]);
+                    $state = array_pop($dirs);
+                    if (preg_match('/^(.+)\\.state(\\d*|\\.auto)$/', $state, $m)) {
+                        $game = $m[1];
+                        $dir  = strtolower(implode('/', $dirs));
+
+                        $locks['*'][$game]  = true;
+                        $locks[$dir][$game] = true;
                     }
                 }
-                $this->lockedStates = $locks;
-            } else {
-                $locks = $this->lockedStates;
             }
         }
-        return $locks[$targetEmu] ?? [];
+        return $locks;
     }
 
     private function isFileType(array $data, string $ext): ?array
@@ -535,6 +548,9 @@ class AdbSync
             $this->println(sprintf('[RAND] %s bytes', number_format($sum)));
             return $newList;
         }
+
+        $this->errorln('ERROR: rand mode must have number or size option');
+        exit(1);
     }
 
     private function isExtractable(array $filesInGame): bool
@@ -614,7 +630,7 @@ class AdbSync
         }
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
-            fwrite(STDERR, "ERROR: $cmd\n");
+            $this->errorln("ERROR: $cmd");
             exit(1);
         }
         return $this->listCore($scanDir, $lines, $withHash);
@@ -628,13 +644,13 @@ class AdbSync
                 escapeshellarg($scanDir),
                 '-type f',
                 '-exec md5sum {} \;'
-            ]);
+            ], 'No such file or directory');
         } else {
             $lines = $this->execRemote([
                 'find',
                 escapeshellarg($scanDir),
                 '-type f',
-            ]);
+            ], 'No such file or directory');
         }
         return $this->listCore($scanDir, $lines, $withHash);
     }
