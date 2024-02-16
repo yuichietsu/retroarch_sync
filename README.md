@@ -16,7 +16,6 @@ RetroArchはFire TV Stickで動作させます。
 
 ### 転送元(PC)
 
-転送元のPCは、WindowsのWLSで動作させています。
 スクリプトを実行するPCでは、次のコマンドを使用しています。
 
 - adb
@@ -27,6 +26,8 @@ RetroArchはFire TV Stickで動作させます。
   - PCの7zをzipに変換して転送したい場合に必要(Lemuroidがzipのみサポートしているので実装してみた)
 - 7z (オプション)
   - PCの7zを展開してから転送したい場合に必要(FDDとかCD系は展開してないとうまく動かない)
+
+転送元のスクリプトは、WindowsのWLSで動作させる前提で作っています。
 
 ### 転送先(Fire TV Stick)
 
