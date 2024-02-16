@@ -1,6 +1,7 @@
 ## 概要
 
-Fire TV Stick上で動かすRetroArchのためにPCからFire TV Stickにゲームを転送するためのスクリプトです。
+RetroArchのためにPCからFire TV Stickにゲームを転送するためのスクリプトです。
+RetroArchはFire TV Stickで動作させます。
 
 - 手動でゲームをコピーするのは面倒くさい
 - PCのディレクトリをsmabaでマウントできなさそう
