@@ -69,5 +69,6 @@ $sync->sync(
         'segacd' => 'rand:2g,ext',
         'tr'     => 'full',
         'quake'  => 'full',
+        'quake2' => 'full:ext',
     ],
 );

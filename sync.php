@@ -35,16 +35,16 @@ class AdbSync
     public ?string $srcPath = null;
     public ?string $dstPath = null;
     public ?array $statesPaths = null;
-    public string $tmpPath;
+    private string $tmpPath;
 
     public int $lockDays = 14;
-    public ?array $lockedStates = null;
+    private ?array $lockedStates = null;
 
     public function __construct(
         private string $adbPath,
         private string $target,
     ) {
-        $this->tmpPath = sys_get_temp_dir() . '/___adb_sync';
+        $this->tmpPath = sys_get_temp_dir() . '/___adb_sync/';
         $this->connect();
     }
 
