@@ -2,22 +2,12 @@
 
 namespace Menrui;
 
-class AdbSyncRetroArch
+class AdbSyncRetroArch extends AdbSync
 {
     private const IDX_PATH = 0;
     private const IDX_FILE = 1;
     private const IDX_HASH = 2;
     private const IDX_DATE = 2;
-
-    private const LIST_NONE = 0;
-    private const LIST_HASH = 1;
-    private const LIST_DATE = 2;
-
-    public array $commands = [
-        'adb'  => 'adb',
-        'find' => 'find',
-        'rm'   => 'rm',
-    ];
 
     public array $archivers = [
         'zip' => [
@@ -33,107 +23,17 @@ class AdbSyncRetroArch
         ],
     ];
 
-    public bool $verbose = false;
-    public bool $debug   = false;
-    public int $retryCount = 5;
-    public int $retrySleep = 60;
-
-    public ?string $srcPath = null;
-    public ?string $dstPath = null;
-    public ?array $statesPaths = null;
-    public int $lockDays = 14;
-
     private string $tmpPath;
+
+    public int $lockDays = 14;
+    public ?array $statesPaths = null;
     private ?array $lockedStates = null;
 
     public function __construct(
-        private string $target,
+        protected string $remote,
     ) {
         $this->tmpPath = sys_get_temp_dir() . '/___adb_sync/';
-        $this->connect();
-    }
-
-    public function println(string|array $messages): void
-    {
-        foreach (is_string($messages) ? [$messages] : $messages as $message) {
-            echo "$message\n";
-        }
-    }
-
-    public function errorln(string|array $messages): void
-    {
-        foreach (is_string($messages) ? [$messages] : $messages as $message) {
-            fwrite(STDERR, "$message\n");
-        }
-    }
-
-    public function connect(): void
-    {
-        exec(implode(' ', [$this->commands['adb'], 'connect', escapeshellarg($this->target), ]), $lines, $ret);
-        if ($ret !== 0) {
-            $this->errorln('ERROR: failed to connect adb server.');
-            $this->errorln($lines);
-            exit(1);
-        }
-    }
-
-    public function execRemote(array $args = [], ?string $exitCond = null): array
-    {
-        $cmd = sprintf('%s shell "%s"', $this->commands['adb'], implode(' ', $args));
-        $this->debug && $this->println($cmd);
-        return $this->retryExec($cmd, $exitCond);
-    }
-
-    private function checkRemotePath(string $path): void
-    {
-        if (!str_starts_with($path, $this->dstPath)) {
-            $this->errorln('ERROR: Remote path must be within the base directory to be removed.');
-            $this->errorln($path);
-            $this->errorln("base : {$this->dstPath}");
-            exit(1);
-        }
-    }
-
-    private function retryExec(string $cmd, ?string $exitCond = null): array
-    {
-        for ($retry = 1; $retry <= $this->retryCount; $retry++) {
-            $outputs = [];
-            exec("$cmd 2>&1", $outputs, $ret);
-            if ($ret === 0) {
-                return $outputs;
-            } else {
-                $this->errorln("ERROR($retry): $cmd");
-                $this->errorln($outputs);
-                if ($exitCond !== null) {
-                    foreach ($outputs as $output) {
-                        if (str_contains($output, $exitCond)) {
-                            exit(1);
-                        }
-                    }
-                }
-            }
-            sleep($this->retrySleep);
-        }
-        exit(1);
-    }
-
-    public function push(string $localFile, string $remoteDir): array
-    {
-        $this->checkRemotePath($remoteDir);
-        $cmd = sprintf(
-            '%s push %s %s',
-            $this->commands['adb'],
-            escapeshellarg($localFile),
-            escapeshellarg($remoteDir),
-        );
-        $this->debug && $this->println($cmd);
-        return $this->retryExec($cmd);
-    }
-
-    public function rmRemote(string $path): array
-    {
-        $this->checkRemotePath($path);
-        return $this->execRemote(['rm', '-rf', escapeshellarg($path)]);
+        parent::__construct($remote);
     }
 
     private function rmLocal(string $path): void
@@ -146,16 +46,6 @@ class AdbSyncRetroArch
             $this->errorln("tmp : {$this->tmpPath}");
             exit(1);
         }
-    }
-
-    public function mkdirRemote(string $dir): array
-    {
-        $this->checkRemotePath($dir);
-        return $this->execRemote([
-            'mkdir',
-            '-p',
-            escapeshellarg($dir),
-        ]);
     }
 
     private function parseOptions(string $optionString): array
@@ -189,21 +79,7 @@ class AdbSyncRetroArch
         return $options;
     }
 
-    private function checkPathSettings(?string $srcPath = null, ?string $dstPath = null): void
-    {
-        $srcPath && ($this->srcPath = $srcPath);
-        $dstPath && ($this->dstPath = $dstPath);
-        if (!$this->srcPath) {
-            $this->errorln('ERROR: srcPath is not specified.');
-            exit(1);
-        }
-        if (!$this->dstPath) {
-            $this->errorln('ERROR: dstPath is not specified.');
-            exit(1);
-        }
-    }
-
-    public function sync(
+    public function syncGames(
         array $targets,
         ?string $srcPath = null,
         ?string $dstPath = null,
@@ -614,7 +490,7 @@ class AdbSyncRetroArch
         return $this->archivers[$extension];
     }
 
-    private function listCore(string $base, array $lines, int $mode): array
+    protected function listCore(string $base, array $lines, int $mode): array
     {
         $list = [];
         !str_ends_with($base, '/') && ($base .= '/');
@@ -647,74 +523,5 @@ class AdbSyncRetroArch
             }
         }
         return $list;
-    }
-
-    private function listLocal(string $scanDir, int $mode = self::LIST_HASH): array
-    {
-        $lines   = [];
-        $args = match ($mode) {
-            self::LIST_NONE => sprintf('%s -type f', escapeshellarg($scanDir)),
-            self::LIST_HASH => sprintf('%s -type f -exec md5sum {} \;', escapeshellarg($scanDir)),
-            self::LIST_DATE => sprintf('%s -type f -exec stat -c "%Y %n" {} \;', escapeshellarg($scanDir)),
-        };
-        $cmd = "{$this->commands['find']} $args";
-        exec($cmd, $lines, $ret);
-        if ($ret !== 0) {
-            $this->errorln("ERROR: $cmd");
-            exit(1);
-        }
-        return $this->listCore($scanDir, $lines, $mode);
-    }
-
-    private function listRemote(string $scanDir, int $mode = self::LIST_HASH): array
-    {
-        $cmd = match ($mode) {
-            self::LIST_NONE => [
-                'find',
-                escapeshellarg($scanDir),
-                '-type f',
-            ],
-            self::LIST_HASH => [
-                'find',
-                escapeshellarg($scanDir),
-                '-type f',
-                '-exec md5sum {} \;'
-            ],
-            self::LIST_DATE => [
-                'find',
-                escapeshellarg($scanDir),
-                '-type f',
-                "-exec stat -c '%Y %n' {} \;",
-            ],
-        };
-        $lines = $this->execRemote($cmd, 'No such file or directory');
-        return $this->listCore($scanDir, $lines, $mode);
-    }
-
-    private function md5(string $path): string
-    {
-        if (str_starts_with($path, $this->srcPath)) {
-            return $this->md5Local($path);
-        }
-
-        if (str_starts_with($path, $this->dstPath)) {
-            return $this->md5Remote($path);
-        }
-
-        $this->errorln('ERROR: File for MD5 is not within srcPath or dstPath.');
-        $this->errorln($path);
-        $this->errorln("srcPath : {$this->srcPath}");
-        $this->errorln("dstPath : {$this->dstPath}");
-        exit(1);
-    }
-
-    private function md5Local(string $path): string
-    {
-        return md5(file_get_contents($path));
-    }
-
-    private function md5Remote(string $path): string
-    {
-        return implode($this->execRemote(['md5sum', '-b', escapeshellarg($path)]));
     }
 }

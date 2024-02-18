@@ -14,7 +14,7 @@ $sync->statesPaths = [
 
 $sync->srcPath = '/mnt/d/files/roms/rebuild';
 $sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM';
-$sync->sync(
+$sync->syncGames(
     [
         'a26'           => 'full',
         'a52'           => 'full',
@@ -58,7 +58,7 @@ $sync->sync(
 
 $sync->srcPath = '/mnt/d/files/roms/src';
 $sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM/src';
-$sync->sync(
+$sync->syncGames(
     [
         '3do'    => 'rand:2g,ext',
         'dc'     => 'rand:2g,ext',
