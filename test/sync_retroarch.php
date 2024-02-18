@@ -1,10 +1,10 @@
 <?php
 
-require_once('sync.php');
+require_once('vendor/autoload.php');
 
 ob_implicit_flush();
 
-$sync = new \Menrui\AdbSync(
+$sync = new \Menrui\AdbSyncRetroArch(
     '192.168.11.44:5555',
 );
 

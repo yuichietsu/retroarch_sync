@@ -2,7 +2,7 @@
 
 namespace Menrui;
 
-class AdbSync
+class AdbSyncRetroArch
 {
     private const IDX_PATH = 0;
     private const IDX_FILE = 1;
