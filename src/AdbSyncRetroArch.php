@@ -51,7 +51,7 @@ class AdbSyncRetroArch extends AdbSync
     private function parseOptions(string $optionString): array
     {
         $options = [];
-        if (preg_match('/^(full|rand|filter)(:.*)?$/', $optionString, $m)) {
+        if (preg_match('/^(full|rand)(:.*)?$/', $optionString, $m)) {
             $options['mode'] = $m[1];
             foreach (explode(',', trim($m[2] ?? '', ':')) as $input) {
                 $i = trim($input);
@@ -71,8 +71,10 @@ class AdbSyncRetroArch extends AdbSync
                     $options['zip'] = true;
                 } elseif (preg_match('/^lock(\\(.*\\))?$/', $i, $im)) {
                     $options['lock'] = strtolower(trim($im[1] ?? '*', '()'));
-                } else {
-                    $options['etc'][] = trim($i, '"');
+                } elseif (preg_match('/^incl(\\(.*\\))?$/', $i, $im)) {
+                    $options['incl'] = explode('|', trim($im[1], '()'));
+                } elseif (preg_match('/^excl(\\(.*\\))?$/', $i, $im)) {
+                    $options['excl'] = explode('|', trim($im[1], '()'));
                 }
             }
         }
@@ -314,14 +316,9 @@ class AdbSyncRetroArch extends AdbSync
             unset($dstList[$dKey]);
         }
         foreach (array_keys($dstList) as $key) {
-            $locks = $this->getLocks($options);
-            if (array_key_exists($this->trimArchiveExtension($key), $locks)) {
-                $this->println("[LOCKED] $key");
-            } else {
-                $this->println("[DEL] $key");
-                $this->rmRemote($this->dstPath . "/$topDir/$key");
-                $c['d']++;
-            }
+            $this->println("[DEL] $key");
+            $this->rmRemote($this->dstPath . "/$topDir/$key");
+            $c['d']++;
         }
         $this->println(sprintf('NEW:%d, UP:%d, SAME:%d, DEL:%s', $c['n'], $c['u'], $c['s'], $c['d']));
     }
@@ -382,30 +379,63 @@ class AdbSyncRetroArch extends AdbSync
         return count($data) === 1 ? $data[0] : null;
     }
 
+    private function filterExclude(array $list, array $options): array
+    {
+        if ($excl = ($options['excl'] ?? false)) {
+            $newList = [];
+            foreach ($list as $k => $v) {
+                $excluded = false;
+                foreach ($excl as $ex) {
+                    if (str_contains($k, $ex)) {
+                        $this->debug && $this->println("[EXCLUDE] $k");
+                        $excluded = true;
+                        break;
+                    }
+                }
+                if (!$excluded) {
+                    $newList[$k] = $v;
+                }
+            }
+            return $newList;
+        } else {
+            return $list;
+        }
+    }
+
+    private function filterInclude(array $list, array $options): array
+    {
+        $locks = $this->getLocks($options);
+        $incl  = $options['incl'] ?? [];
+        if ($locks || $locks) {
+            $newList = [];
+            foreach ($list as $k => $v) {
+                foreach ($incl as $in) {
+                    if (str_contains($k, $in)) {
+                        $newList[$k] = $v;
+                        break;
+                    }
+                }
+                if (array_key_exists($this->trimArchiveExtension($k), $locks)) {
+                    $newList[$k] = $v;
+                    $this->println("[LOCKED] $k");
+                }
+            }
+            return $newList;
+        } else {
+            return $list;
+        }
+    }
+
     private function filterSrcList(array $srcList, array $options): array
     {
+        $srcList = $this->filterExclude($srcList, $options);
+
         if ($options['mode'] === 'full') {
             return $srcList;
         }
 
-        if ($options['mode'] === 'filter') {
-            $newList = [];
-            $filters = array_map(fn ($n) => strtolower($n), $options['etc'] ?? []);
-            foreach ($srcList as $key => $data) {
-                $lcKey = strtolower($key);
-                foreach ($filters as $filter) {
-                    if (str_contains($lcKey, $filter)) {
-                        $newList[$key] = $data;
-                        break;
-                    }
-                }
-            }
-            $this->println(sprintf('[FILTER] %s files', number_format(count($newList))));
-            return $newList;
-        }
-
         if ($num = ($options['num'] ?? false)) {
-            $newList = [];
+            $newList = $this->filterInclude($srcList, $options);
             $keys    = array_rand($srcList, min(count($srcList), $num));
             foreach (is_array($keys) ? $keys : [$keys] as $key) {
                 $newList[$key] = $srcList[$key];
@@ -418,26 +448,40 @@ class AdbSyncRetroArch extends AdbSync
             $extract = $options['ext'] ?? false;
             $sum     = 0;
             $newList = [];
-            $tmpKeys = array_keys($srcList);
-            shuffle($tmpKeys);
-            foreach ($tmpKeys as $key) {
-                $data = $srcList[$key];
-                if ($extract && $this->isExtractable($data)) {
-                    [$fileInfo] = $data;
-                    [$file]     = $fileInfo;
-                    $size   = $this->getSizeInArchive($file);
-                } else {
-                    $size = 0;
-                    foreach ($data as $file) {
-                        [$path] = $file;
-                        $size   += filesize($path);
+
+            $filter = function ($keys, $th) use ($srcList, &$newList, &$sum, $extract) {
+                foreach ($keys as $key) {
+                    if (array_key_exists($key, $newList)) {
+                        continue;
+                    }
+                    $data = $srcList[$key];
+                    if ($extract && $this->isExtractable($data)) {
+                        [$fileInfo] = $data;
+                        [$file]     = $fileInfo;
+                        $size   = $this->getSizeInArchive($file);
+                    } else {
+                        $size = 0;
+                        foreach ($data as $file) {
+                            [$path] = $file;
+                            $size   += filesize($path);
+                        }
+                    }
+                    if (($sum + $size) <= $th) {
+                        $newList[$key] = $data;
+                        $sum += $size;
                     }
                 }
-                if (($sum + $size) <= $th) {
-                    $newList[$key] = $data;
-                    $sum += $size;
-                }
+            };
+
+            $tmpKeys = array_keys($this->filterInclude($srcList, $options));
+            $filter($tmpKeys, PHP_INT_MAX);
+
+            if ($sum <= $th) {
+                $tmpKeys = array_keys($srcList);
+                shuffle($tmpKeys);
+                $filter($tmpKeys, $th);
             }
+
             $this->println(sprintf('[RAND] %s bytes', number_format($sum)));
             return $newList;
         }
