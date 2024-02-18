@@ -47,7 +47,7 @@ file1.txt
 # composer run sync -- send /mnt/d/tmp/test 192.168.11.44:/storage/B42F-0FFA/test
 ```
 
-Androidにないファイルのみ送信する
+- PCからAndroidにないファイルのみ送信する
 
 ### 更新
 
@@ -55,8 +55,8 @@ Androidにないファイルのみ送信する
 # composer run sync -- update /mnt/d/tmp/test 192.168.11.44:/storage/B42F-0FFA/test
 ```
 
-- Androidにないファイルを送信する。
-- ハッシュが一致しないファイルを送信する。
+- PCからAndroidにないファイルを送信する。
+- ハッシュが一致しないファイルをPCからAndroidに送信する。
 
 ### 同期
 
@@ -64,9 +64,9 @@ Androidにないファイルのみ送信する
 # composer run sync -- sync /mnt/d/tmp/test 192.168.11.44:/storage/B42F-0FFA/test
 ```
 
-- Androidにないファイルを送信する。
-- ハッシュが一致しないファイルを送信する。
-- Androidしか存在しないファイルを削除する。
+- PCからAndroidにないファイルを送信する。
+- ハッシュが一致しないファイルをPCからAndroidに送信する。
+- Androidしか存在しないファイルをAndroidから削除する。
 
 ## 免責
 
