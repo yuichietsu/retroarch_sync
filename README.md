@@ -22,6 +22,7 @@ PCにだけファイルがある場合
 
 ```
 [SRC ONLY]
+docs/
 file1.txt
 list.txt
 ```
@@ -30,6 +31,7 @@ Androidにだけファイルがある場合
 
 ```
 [DST ONLY]
+files/
 image1.jpg
 image2.jpg
 ```
