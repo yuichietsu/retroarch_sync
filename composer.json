@@ -1,0 +1,12 @@
+{
+    "name": "menrui/adb_sync",
+    "description": "send files to android using adb",
+    "type": "project",
+    "license": "MIT",
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "Menrui\\": "src/"
+        }
+    }
+}
