@@ -261,13 +261,13 @@ class AdbSync
         return implode($this->execRemote(['md5sum', '-b', escapeshellarg($path)]));
     }
 
-    private function printDiffList(array $list, string $title): void
+    private function printDiffList(array $list, string $title = null, string $prefix = '', string $suffix = ''): void
     {
         if (count($list) > 0) {
-            $this->println($title);
+            $title && $this->println($title);
             ksort($list);
             foreach ($list as $file) {
-                $this->println($file);
+                $this->println("$prefix$file$suffix");
             }
         }
     }
@@ -275,10 +275,20 @@ class AdbSync
     public function diff(): void
     {
         $this->checkPathSettings();
+
         $srcList = $this->listLocal($this->srcPath, self::LIST_HASH);
         $dstList = $this->listRemote($this->dstPath, self::LIST_HASH);
-        $this->printDiffList(array_keys(array_diff_key($srcList, $dstList)), '[SRC ONLY]');
-        $this->printDiffList(array_keys(array_diff_key($dstList, $srcList)), '[DST ONLY]');
+        $srcDirs = $this->dirsLocal($this->srcPath);
+        $dstDirs = $this->dirsRemote($this->dstPath);
+
+        $fSrcDiff = array_keys(array_diff_key($srcList, $dstList));
+        $dSrcDiff = array_map(fn ($n) => "$n/", array_keys(array_diff_key($srcDirs, $dstDirs)));
+        $this->printDiffList([...$dSrcDiff, ...$fSrcDiff], '[SRC ONLY]');
+
+        $fDstDiff = array_keys(array_diff_key($dstList, $srcList));
+        $dDstDiff = array_map(fn ($n) => "$n/", array_keys(array_diff_key($dstDirs, $srcDirs)));
+        $this->printDiffList([...$dDstDiff, ...$fDstDiff], '[DST ONLY]');
+
         $diff = [];
         foreach (array_keys(array_intersect_key($srcList, $dstList)) as $key) {
             if ($srcList[$key] !== $dstList[$key]) {
