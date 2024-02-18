@@ -404,13 +404,14 @@ class AdbSyncRetroArch extends AdbSync
 
     private function filterInclude(array $list, array $options): array
     {
-        $locks = $this->getLocks($options);
-        $incl  = $options['incl'] ?? [];
-        if ($locks || $locks) {
-            $newList = [];
+        $newList = [];
+        $locks   = $this->getLocks($options);
+        $incl    = $options['incl'] ?? [];
+        if ($locks || $incl) {
             foreach ($list as $k => $v) {
                 foreach ($incl as $in) {
                     if (str_contains($k, $in)) {
+                        $this->debug && $this->println("[INCLUDE] $k");
                         $newList[$k] = $v;
                         break;
                     }
@@ -420,10 +421,8 @@ class AdbSyncRetroArch extends AdbSync
                     $this->println("[LOCKED] $k");
                 }
             }
-            return $newList;
-        } else {
-            return $list;
         }
+        return $newList;
     }
 
     private function filterSrcList(array $srcList, array $options): array
@@ -436,9 +435,12 @@ class AdbSyncRetroArch extends AdbSync
 
         if ($num = ($options['num'] ?? false)) {
             $newList = $this->filterInclude($srcList, $options);
-            $keys    = array_rand($srcList, min(count($srcList), $num));
-            foreach (is_array($keys) ? $keys : [$keys] as $key) {
-                $newList[$key] = $srcList[$key];
+            $randNum = min(count($srcList), $num) - count($newList);
+            if (0 < $randNum) {
+                $keys    = array_rand($srcList, $randNum);
+                foreach (is_array($keys) ? $keys : [$keys] as $key) {
+                    $newList[$key] = $srcList[$key];
+                }
             }
             $this->println(sprintf('[RAND] %s files', number_format(count($newList))));
             return $newList;

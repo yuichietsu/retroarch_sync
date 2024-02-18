@@ -60,7 +60,7 @@ $sync->srcPath = '/mnt/d/files/roms/src';
 $sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM/src';
 $sync->syncGames(
     [
-        '3do'    => 'rand:2g,ext',
+        '3do'    => 'rand:2g,ext,excl(Hatou|Shokutaku|Shin-chan|Kitty|Menkyo|Kanji)',
         'dc'     => 'rand:2g,ext',
         'pcecd'  => 'rand:4g,ext',
         'pcfx'   => 'rand:2g,ext',
