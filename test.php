@@ -5,9 +5,9 @@ require_once('sync.php');
 ob_implicit_flush();
 
 $sync = new \Menrui\AdbSync(
-    '/usr/bin/adb',
     '192.168.11.44:5555',
 );
+
 $sync->statesPaths = [
     '/storage/emulated/0/RetroArch/states',
 ];

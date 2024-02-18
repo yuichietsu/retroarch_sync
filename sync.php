@@ -13,7 +13,13 @@ class AdbSync
     private const LIST_HASH = 1;
     private const LIST_DATE = 2;
 
-    private array $supportedArchives = [
+    public array $commands = [
+        'adb'  => 'adb',
+        'find' => 'find',
+        'rm'   => 'rm',
+    ];
+
+    public array $archivers = [
         'zip' => [
             'c' => 'zip -9',
             'x' => 'unzip',
@@ -35,13 +41,12 @@ class AdbSync
     public ?string $srcPath = null;
     public ?string $dstPath = null;
     public ?array $statesPaths = null;
-    private string $tmpPath;
-
     public int $lockDays = 14;
+
+    private string $tmpPath;
     private ?array $lockedStates = null;
 
     public function __construct(
-        private string $adbPath,
         private string $target,
     ) {
         $this->tmpPath = sys_get_temp_dir() . '/___adb_sync/';
@@ -64,7 +69,7 @@ class AdbSync
 
     public function connect(): void
     {
-        exec(implode(' ', [$this->adbPath, 'connect', escapeshellarg($this->target), ]), $lines, $ret);
+        exec(implode(' ', [$this->commands['adb'], 'connect', escapeshellarg($this->target), ]), $lines, $ret);
         if ($ret !== 0) {
             $this->errorln('ERROR: failed to connect adb server.');
             $this->errorln($lines);
@@ -74,7 +79,7 @@ class AdbSync
 
     public function execRemote(array $args = [], ?string $exitCond = null): array
     {
-        $cmd = sprintf('%s shell "%s"', $this->adbPath, implode(' ', $args));
+        $cmd = sprintf('%s shell "%s"', $this->commands['adb'], implode(' ', $args));
         $this->debug && $this->println($cmd);
         return $this->retryExec($cmd, $exitCond);
     }
@@ -117,7 +122,7 @@ class AdbSync
         $this->checkRemotePath($remoteDir);
         $cmd = sprintf(
             '%s push %s %s',
-            $this->adbPath,
+            $this->commands['adb'],
             escapeshellarg($localFile),
             escapeshellarg($remoteDir),
         );
@@ -134,7 +139,7 @@ class AdbSync
     private function rmLocal(string $path): void
     {
         if (str_starts_with($path, $this->tmpPath)) {
-            file_exists($path) && exec(sprintf('rm -rf %s', escapeshellarg($path)));
+            file_exists($path) && exec(sprintf('%s -rf %s', $this->commands['rm'], escapeshellarg($path)));
         } else {
             $this->errorln('ERROR: Local files must be within the tmp directory to be removed.');
             $this->errorln($path);
@@ -294,7 +299,7 @@ class AdbSync
         $hashFile      = "hash_$hash";
         touch("$dir/$hashFile");
 
-        $exe = $this->supportedArchives['zip']['c'];
+        $exe = $this->archivers['zip']['c'];
         $cmd = sprintf(
             "cd %s; $exe %s.zip %s",
             escapeshellarg($dir),
@@ -599,14 +604,14 @@ class AdbSync
     {
         return implode('|', array_map(
             fn ($n) => preg_quote($n, '/'),
-            array_keys($this->supportedArchives)
+            array_keys($this->archivers)
         ));
     }
 
     private function getArchiveInfo(string $file): array
     {
         $extension = $this->getSupportedArchiveExtension($file);
-        return $this->supportedArchives[$extension];
+        return $this->archivers[$extension];
     }
 
     private function listCore(string $base, array $lines, int $mode): array
@@ -647,11 +652,12 @@ class AdbSync
     private function listLocal(string $scanDir, int $mode = self::LIST_HASH): array
     {
         $lines   = [];
-        $cmd = match ($mode) {
-            self::LIST_NONE => sprintf('find %s -type f', escapeshellarg($scanDir)),
-            self::LIST_HASH => sprintf('find %s -type f -exec md5sum {} \;', escapeshellarg($scanDir)),
-            self::LIST_DATE => sprintf('find %s -type f -exec stat -c "%Y %n" {} \;', escapeshellarg($scanDir)),
+        $args = match ($mode) {
+            self::LIST_NONE => sprintf('%s -type f', escapeshellarg($scanDir)),
+            self::LIST_HASH => sprintf('%s -type f -exec md5sum {} \;', escapeshellarg($scanDir)),
+            self::LIST_DATE => sprintf('%s -type f -exec stat -c "%Y %n" {} \;', escapeshellarg($scanDir)),
         };
+        $cmd = "{$this->commands['find']} $args";
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
             $this->errorln("ERROR: $cmd");
