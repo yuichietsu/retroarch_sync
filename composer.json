@@ -4,6 +4,9 @@
     "type": "project",
     "license": "MIT",
     "require": {},
+    "scripts": {
+        "sync": "bin/sync.php"
+    },
     "autoload": {
         "psr-4": {
             "Menrui\\": "src/"
