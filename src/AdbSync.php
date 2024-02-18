@@ -136,6 +136,30 @@ class AdbSync
         }
     }
 
+    protected function dirsLocal(string $scanDir): array
+    {
+        $lines = [];
+        $cmd = sprintf('%s %s -mindepth 1 -type d', $this->commands['find'], escapeshellarg($scanDir));
+        exec($cmd, $lines, $ret);
+        if ($ret !== 0) {
+            $this->errorln("ERROR: $cmd");
+            exit(1);
+        }
+        return $this->listCore($scanDir, $lines, self::LIST_NONE);
+    }
+
+    protected function dirsRemote(string $scanDir): array
+    {
+        $cmd = [
+            'find',
+            escapeshellarg($scanDir),
+            '-mindepth 1',
+            '-type d',
+        ];
+        $lines = $this->execRemote($cmd, 'No such file or directory');
+        return $this->listCore($scanDir, $lines, self::LIST_NONE);
+    }
+
     protected function listLocal(string $scanDir, int $mode = self::LIST_HASH): array
     {
         $lines   = [];
@@ -286,6 +310,15 @@ class AdbSync
             [$src, $dst] = $this->pushFile($file);
             $this->println("[SEND] $src => $dst");
         }
+
+        $srcDirs = $this->dirsLocal($this->srcPath);
+        $dstDirs = $this->dirsRemote($this->dstPath);
+        $srcOnly = array_keys(array_diff_key($srcDirs, $dstDirs));
+        foreach ($srcOnly as $dir) {
+            $path = $this->dstPath . "/$dir";
+            $this->mkdirRemote($path);
+            $this->println("[MKDIR] $path");
+        }
         return [$srcList, $dstList];
     }
 
@@ -309,6 +342,15 @@ class AdbSync
             $path = $this->dstPath . "/$file";
             $this->rmRemote($path);
             $this->println("[DELETE] $path");
+        }
+
+        $srcDirs = $this->dirsLocal($this->srcPath);
+        $dstDirs = $this->dirsRemote($this->dstPath);
+        $dstOnly = array_keys(array_diff_key($dstDirs, $srcDirs));
+        foreach ($dstOnly as $dir) {
+            $path = $this->dstPath . "/$dir";
+            $this->rmRemote($path);
+            $this->println("[RMDIR] $path");
         }
         return [$srcList, $dstList];
     }
