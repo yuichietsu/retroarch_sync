@@ -11,7 +11,7 @@ class AdbSyncRetroArch extends AdbSync
 
     public array $archivers = [
         'zip' => [
-            'c' => 'zip -9',
+            'c' => 'zip -9 %TO% %FROM%',
             'x' => 'unzip',
             'l' => 'unzip -l',
             'sizeParser' => '/(?<size>\\d+)\\s+(?<num>\\d+)\\s+files?/',
@@ -20,6 +20,14 @@ class AdbSyncRetroArch extends AdbSync
             'x' => '7z e',
             'l' => '7z l',
             'sizeParser' => '/(?<size>\\d+)\\s+\\d+\\s+(?<num>\\d+)\\s+files?/',
+        ],
+        'cso' => [
+            'c' => 'ciso 9 %FROM% %TO% 2>&1',
+            'inputFilter' => '/\\.iso$/i',
+        ],
+        'chd' => [
+            'c' => 'chdman createcd -i %FROM% -o %TO% 2>&1',
+            'inputFilter' => '/\\.(gdi|cue|ccd|iso)$/i',
         ],
     ];
 
@@ -69,6 +77,10 @@ class AdbSyncRetroArch extends AdbSync
                     $options['ext'] = true;
                 } elseif ($i === 'zip') {
                     $options['zip'] = true;
+                } elseif ($i === 'cso') {
+                    $options['cso'] = true;
+                } elseif ($i === 'chd') {
+                    $options['chd'] = true;
                 } elseif (preg_match('/^lock(\\(.*\\))?$/', $i, $im)) {
                     $options['lock'] = strtolower(trim($im[1] ?? '*', '()'));
                 } elseif (preg_match('/^incl(\\(.*\\))?$/', $i, $im)) {
@@ -170,6 +182,21 @@ class AdbSyncRetroArch extends AdbSync
 
     private function sync7zToZip(string $topDir, array $sData, string $dirName): void
     {
+        $this->syncArcToArc($topDir, $sData, $dirName, 'zip');
+    }
+
+    private function syncArcToCso(string $topDir, array $sData, string $dirName): void
+    {
+        $this->syncArcToArc($topDir, $sData, $dirName, 'cso');
+    }
+
+    private function syncArcToChd(string $topDir, array $sData, string $dirName): void
+    {
+        $this->syncArcToArc($topDir, $sData, $dirName, 'chd');
+    }
+
+    private function syncArcToArc(string $topDir, array $sData, string $dirName, string $to): void
+    {
         [$fileInfo]    = $sData;
         [$src]         = $fileInfo;
         [$dir, $files] = $this->extractArchive($src);
@@ -177,12 +204,21 @@ class AdbSyncRetroArch extends AdbSync
         $hashFile      = "hash_$hash";
         touch("$dir/$hashFile");
 
-        $exe = $this->archivers['zip']['c'];
-        $cmd = sprintf(
-            "cd %s; $exe %s.zip %s",
-            escapeshellarg($dir),
-            escapeshellarg($dirName),
-            implode(' ', array_map('escapeshellarg', $files))
+        $exe = $this->archivers[$to]['c'];
+        if ($iFilter = $this->archivers[$to]['inputFilter'] ?? null) {
+            $newFiles = [];
+            foreach ($files as $file) {
+                if (preg_match($iFilter, $file)) {
+                    $newFiles[] = $file;
+                    break;
+                }
+            }
+            $files = $newFiles ?: $files;
+        }
+        $cmd = str_replace(
+            ['%TO%', '%FROM%'],
+            [escapeshellarg($dirName) . ".$to", implode(' ', array_map('escapeshellarg', $files))],
+            sprintf("cd %s; %s", escapeshellarg($dir), $exe)
         );
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
@@ -193,7 +229,7 @@ class AdbSyncRetroArch extends AdbSync
         }
 
         $files = [
-            "$dirName.zip",
+            "$dirName.$to",
             $hashFile,
         ];
         foreach ($files as $file) {
@@ -281,13 +317,25 @@ class AdbSyncRetroArch extends AdbSync
         array $dstList,
         array $options
     ): void {
+        $cso = $options['cso'] ?? false;
+        $chd = $options['chd'] ?? false;
+        $zip = $options['zip'] ?? false;
+        $ext = $options['ext'] ?? false;
         $c = ['n' => 0, 'u' => 0, 'd' => 0, 's' => 0];
         foreach ($srcList as $sKey => $sData) {
-            if (($options['zip'] ?? false) && $this->isFileType($sData, '7z')) {
+            if ($zip && $this->isFileType($sData, '7z')) {
                 $dKey = $this->trimArchiveExtension($sKey);
                 $comp = $this->compareHashFile(...);
                 $sync = $this->sync7zToZip(...);
-            } elseif (($options['ext'] ?? false) && $this->isExtractable($sData)) {
+            } elseif ($cso && $this->isFileType($sData, ['7z', 'zip'])) {
+                $dKey = $this->trimArchiveExtension($sKey);
+                $comp = $this->compareHashFile(...);
+                $sync = $this->syncArcToCso(...);
+            } elseif ($chd && $this->isFileType($sData, ['7z', 'zip'])) {
+                $dKey = $this->trimArchiveExtension($sKey);
+                $comp = $this->compareHashFile(...);
+                $sync = $this->syncArcToChd(...);
+            } elseif ($ext && $this->isExtractable($sData)) {
                 $dKey = $this->trimArchiveExtension($sKey);
                 $comp = $this->compareHashFile(...);
                 $sync = $this->syncArchiveFiles(...);
@@ -363,14 +411,17 @@ class AdbSyncRetroArch extends AdbSync
         return $locks;
     }
 
-    private function isFileType(array $data, string $ext): ?array
+    private function isFileType(array $data, string|array $ext): ?array
     {
         $file = $this->isSingleFile($data);
         if (!$file) {
             return false;
         }
         [$path] = $file;
-        $escExt = preg_quote($ext, '/');
+        $escExt = implode('|', array_map(
+            fn ($n) => preg_quote($n, '/'),
+            is_string($ext) ? [$ext] : $ext
+        ));
         return preg_match("/\\.{$escExt}\$/", $path) ? $file : null;
     }
 
