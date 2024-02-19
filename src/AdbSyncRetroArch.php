@@ -27,7 +27,7 @@ class AdbSyncRetroArch extends AdbSync
         ],
         'chd' => [
             'c' => 'chdman createcd -i %FROM% -o %TO% 2>&1',
-            'inputFilter' => '/\\.(gdi|cue|ccd|iso)$/i',
+            'inputFilter' => '/\\.(gdi|cue|iso)$/i',
         ],
     ];
 
