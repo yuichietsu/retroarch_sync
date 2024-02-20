@@ -462,7 +462,7 @@ class AdbSyncRetroArch extends AdbSync
             fn ($n) => preg_quote($n, '/'),
             is_string($ext) ? [$ext] : $ext
         ));
-        return preg_match("/\\.{$escExt}\$/", $path) ? $file : null;
+        return preg_match("/\\.({$escExt})\$/", $path) ? $file : null;
     }
 
     private function isSingleFile(array $data): ?array
