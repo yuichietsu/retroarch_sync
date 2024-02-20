@@ -37,6 +37,8 @@ class AdbSyncRetroArch extends AdbSync
     public ?array $statesPaths = null;
     private ?array $lockedStates = null;
 
+    public string $diskFilter = '/^(.+)\\(Dis[kc] *\\d+\\)/';
+
     public function __construct(
         protected string $remote,
     ) {
@@ -73,20 +75,14 @@ class AdbSyncRetroArch extends AdbSync
                         'm' => $size * 1024 * 1024,
                         'k' => $size * 1024,
                     };
-                } elseif ($i === 'ext') {
-                    $options['ext'] = true;
-                } elseif ($i === 'zip') {
-                    $options['zip'] = true;
-                } elseif ($i === 'cso') {
-                    $options['cso'] = true;
-                } elseif ($i === 'chd') {
-                    $options['chd'] = true;
                 } elseif (preg_match('/^lock(\\(.*\\))?$/', $i, $im)) {
                     $options['lock'] = strtolower(trim($im[1] ?? '*', '()'));
                 } elseif (preg_match('/^incl(\\(.*\\))?$/', $i, $im)) {
                     $options['incl'] = explode('|', trim($im[1], '()'));
                 } elseif (preg_match('/^excl(\\(.*\\))?$/', $i, $im)) {
                     $options['excl'] = explode('|', trim($im[1], '()'));
+                } else {
+                    $options[$i] = true;
                 }
             }
         }
@@ -118,9 +114,48 @@ class AdbSyncRetroArch extends AdbSync
                 $srcList = $this->filterSrcList($srcList, $options);
                 $dstList = $this->listRemote($this->dstPath . "/$dir", $mode);
                 $this->syncCore($dir, $srcList, $dstList, $options);
+                $this->makeM3U($dir, $options);
             } else {
                 $this->verbose && $this->println("[SKIP] $dir");
             }
+        }
+    }
+
+    private function sendM3U(string $topDir, array $m3u): void
+    {
+        if (count($m3u) === 0) {
+            return;
+        }
+        $tmp = $this->makeTmpDir();
+        foreach ($m3u as $key => $files) {
+            sort($files);
+            $m3uFile = "$key.m3u";
+            file_put_contents("$tmp/$m3uFile", implode("\n", $files));
+            $dst = $this->dstPath . "/$topDir/$m3uFile";
+            $this->push("$tmp/$m3uFile", $dst);
+            $this->println("[PUSH] $m3uFile");
+        }
+        $this->rmLocal($tmp);
+    }
+
+    private function makeM3U(string $topDir, array $options): void
+    {
+        if ($options['disks'] ?? false) {
+            $m3u  = [];
+            $list = $this->listRemote($this->dstPath . "/$topDir", self::LIST_NONE);
+            foreach ($list as $key => $files) {
+                if (preg_match($this->diskFilter, $key, $md)) {
+                    $disksKey = $md[1];
+                    foreach ($files as $file) {
+                        $rFile = $file[self::IDX_FILE];
+                        if (preg_match('/\\.(cso|chd|7z|zip)$/i', $rFile)) {
+                            $m3u[$disksKey][] = $rFile;
+                            break;
+                        }
+                    }
+                }
+            }
+            $this->sendM3U($topDir, $m3u);
         }
     }
 
@@ -138,7 +173,7 @@ class AdbSyncRetroArch extends AdbSync
         }
     }
 
-    private function extractArchive(string $file): array
+    private function makeTmpDir(): string
     {
         do {
             $rand = md5(mt_rand());
@@ -146,18 +181,23 @@ class AdbSyncRetroArch extends AdbSync
         } while (file_exists($dir));
         mkdir($dir, 0777, true);
         register_shutdown_function($this->rmLocal(...), $dir);
+        return $dir;
+    }
 
+    private function extractArchive(string $file): array
+    {
+        $tmp     = $this->makeTmpDir();
         $arcInfo = $this->getArchiveInfo($file);
         $exe     = $arcInfo['x'];
-        $cmd     = sprintf('cd %s; %s %s', escapeshellarg($dir), $exe, escapeshellarg($file));
+        $cmd     = sprintf('cd %s; %s %s', escapeshellarg($tmp), $exe, escapeshellarg($file));
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
             fwrite(STDERR, "ERROR: $cmd\n");
             fwrite(STDERR, implode("\n", $lines));
             exit(1);
         }
-        $files = glob("$dir/*");
-        return [$dir, array_map(fn ($n) => str_replace("$dir/", '', $n), $files)];
+        $files = glob("$tmp/*");
+        return [$tmp, array_map(fn ($n) => str_replace("$tmp/", '', $n), $files)];
     }
 
     private function getSizeInArchive(string $file): int
@@ -501,8 +541,9 @@ class AdbSyncRetroArch extends AdbSync
             $extract = $options['ext'] ?? false;
             $sum     = 0;
             $newList = [];
+            $disks   = ($options['disks'] ?? false) ? [] : null;
 
-            $filter = function ($keys, $th) use ($srcList, &$newList, &$sum, $extract) {
+            $filter = function ($keys, $th) use ($srcList, &$newList, &$sum, $extract, &$disks) {
                 foreach ($keys as $key) {
                     if (array_key_exists($key, $newList)) {
                         continue;
@@ -519,9 +560,17 @@ class AdbSyncRetroArch extends AdbSync
                             $size   += filesize($path);
                         }
                     }
-                    if (($sum + $size) <= $th) {
+                    $force = $disksKey = false;
+                    if ($disks !== null && preg_match($this->diskFilter, $key, $md)) {
+                        $disksKey = $md[1];
+                        $force    = array_key_exists($disksKey, $disks);
+                    }
+                    if ($force || ($sum + $size) <= $th) {
                         $newList[$key] = $data;
                         $sum += $size;
+                        if ($disksKey) {
+                            $disks[$disksKey][] = $key;
+                        }
                     }
                 }
             };
