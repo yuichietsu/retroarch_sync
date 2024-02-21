@@ -28,6 +28,9 @@ class AdbSyncRetroArch extends AdbSync
         'chd' => [
             'c' => 'chdman createcd -i %FROM% -o %TO% 2>&1',
             'inputFilter' => '/\\.(gdi|cue|iso)$/i',
+            'converter' => [
+                '/\\.ccd$/' => [\Menrui\CCD2CUE::class, 'convert'],
+            ],
         ],
     ];
 
@@ -184,7 +187,7 @@ class AdbSyncRetroArch extends AdbSync
         return $dir;
     }
 
-    private function extractArchive(string $file): array
+    private function extractArchive(string $file, string $to = null): array
     {
         $tmp     = $this->makeTmpDir();
         $arcInfo = $this->getArchiveInfo($file);
@@ -197,6 +200,15 @@ class AdbSyncRetroArch extends AdbSync
             exit(1);
         }
         $files = glob("$tmp/*");
+        if ($to && ($converter = $this->archivers[$to]['converter'] ?? null)) {
+            foreach ($converter as $k => $v) {
+                foreach ($files as $file) {
+                    if (preg_match($k, $file)) {
+                        $files[] = call_user_func($v, $file);
+                    }
+                }
+            }
+        }
         return [$tmp, array_map(fn ($n) => str_replace("$tmp/", '', $n), $files)];
     }
 
@@ -239,13 +251,14 @@ class AdbSyncRetroArch extends AdbSync
     {
         [$fileInfo]    = $sData;
         [$src]         = $fileInfo;
-        [$dir, $files] = $this->extractArchive($src);
+        [$dir, $files] = $this->extractArchive($src, $to);
         $hash          = $this->getFileHash($fileInfo);
         $hashFile      = "hash_$hash";
         touch("$dir/$hashFile");
 
-        $exe = $this->archivers[$to]['c'];
-        if ($iFilter = $this->archivers[$to]['inputFilter'] ?? null) {
+        $archiver = $this->archivers[$to];
+        $exe = $archiver['c'];
+        if ($iFilter = $archiver['inputFilter'] ?? null) {
             $newFiles = [];
             foreach ($files as $file) {
                 if (preg_match($iFilter, $file)) {

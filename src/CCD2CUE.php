@@ -11,7 +11,7 @@ class CCD2CUE
 {
     public const IMAGE_EXTS = ['img', 'bin', 'iso'];
 
-    public function convert(string $ccdPath, ?string $cuePath = null): void
+    public static function convert(string $ccdPath, ?string $cuePath = null): string
     {
         if (!file_exists($ccdPath)) {
             throw new Exception("ccd file not found: $ccdPath");
@@ -76,5 +76,6 @@ class CCD2CUE
             }
         }
         file_put_contents($cuePath, implode($cue));
+        return $cuePath;
     }
 }
