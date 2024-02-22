@@ -54,10 +54,11 @@ class AdbSyncRetroArch extends AdbSync
         if (str_starts_with($path, $this->tmpPath)) {
             file_exists($path) && exec(sprintf('%s -rf %s', $this->commands['rm'], escapeshellarg($path)));
         } else {
-            $this->errorln('ERROR: Local files must be within the tmp directory to be removed.');
-            $this->errorln($path);
-            $this->errorln("tmp : {$this->tmpPath}");
-            exit(1);
+            throw new Exception(implode("\n", [
+                'Local files must be within the tmp directory to be removed.',
+                $path,
+                "tmp : {$this->tmpPath}",
+            ]));
         }
     }
 
@@ -104,11 +105,11 @@ class AdbSyncRetroArch extends AdbSync
                 continue;
             }
             if (array_key_exists($dir, $targets)) {
-                $this->println("[SCAN] $dir");
+                $this->log("[SCAN] $dir");
                 $settings = $targets[$dir];
                 $options  = $this->parseOptions($settings);
                 if (!($options['mode'] ?? false)) {
-                    $this->println("[SKIP] invalid settings : $settings");
+                    $this->log("[SKIP] invalid settings : $settings");
                     continue;
                 }
                 $mode = $options['mode'] === 'full' ? self::LIST_HASH : self::LIST_NONE;
@@ -119,7 +120,7 @@ class AdbSyncRetroArch extends AdbSync
                 $this->syncCore($dir, $srcList, $dstList, $options);
                 $this->makeM3U($dir, $options);
             } else {
-                $this->verbose && $this->println("[SKIP] $dir");
+                $this->verbose && $this->log("[SKIP] $dir");
             }
         }
     }
@@ -136,7 +137,7 @@ class AdbSyncRetroArch extends AdbSync
             file_put_contents("$tmp/$m3uFile", implode("\n", $files));
             $dst = $this->dstPath . "/$topDir/$m3uFile";
             $this->push("$tmp/$m3uFile", $dst);
-            $this->println("[PUSH] $m3uFile");
+            $this->log("[PUSH] $m3uFile");
         }
         $this->rmLocal($tmp);
     }
@@ -172,7 +173,7 @@ class AdbSyncRetroArch extends AdbSync
                 $this->mkdirRemote($dstDir);
             }
             $this->push($src, $dst);
-            $this->println("[PUSH] $file");
+            $this->log("[PUSH] $file");
         }
     }
 
@@ -195,9 +196,7 @@ class AdbSyncRetroArch extends AdbSync
         $cmd     = sprintf('cd %s; %s %s', escapeshellarg($tmp), $exe, escapeshellarg($file));
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
-            fwrite(STDERR, "ERROR: $cmd\n");
-            fwrite(STDERR, implode("\n", $lines));
-            exit(1);
+            throw new Exception(implode("\n", [$cmd, ...$lines]));
         }
         $files = glob("$tmp/*");
         if ($to && ($converter = $this->archivers[$to]['converter'] ?? null)) {
@@ -219,15 +218,11 @@ class AdbSyncRetroArch extends AdbSync
         $cmd     = sprintf('%s %s', $exe, escapeshellarg($file));
         $last    = exec($cmd, $lines, $ret);
         if ($ret !== 0) {
-            fwrite(STDERR, "ERROR: $cmd\n");
-            fwrite(STDERR, implode("\n", $lines));
-            exit(1);
+            throw new Exception(implode("\n", [$cmd, ...$lines]));
         }
         preg_match($arcInfo['sizeParser'], $last, $info);
         if (!($info['size'] ?? false)) {
-            fwrite(STDERR, "ERROR: cannot retrieve uncompressed file size.\n");
-            fwrite(STDERR, implode("\n", [$cmd, ...$lines]));
-            exit(1);
+            throw new Exception(implode("\n", ['cannot retrieve uncompressed file size.', $cmd, ...$lines]));
         }
         return $info['size'];
     }
@@ -275,10 +270,11 @@ class AdbSyncRetroArch extends AdbSync
         );
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
-            $this->errorln('ERROR: Failed to create a zip file.');
-            $this->errorln($cmd);
-            $this->errorln(implode("\n", $lines));
-            exit(1);
+            throw new Exception(implode("\n", [
+                'ERROR: Failed to create a zip file.',
+                $cmd,
+                ...$lines,
+            ]));
         }
 
         $files = [
@@ -292,7 +288,7 @@ class AdbSyncRetroArch extends AdbSync
                 $this->mkdirRemote($dstDir);
             }
             $this->push("$dir/$file", $dst);
-            $this->println("[PUSH] $file");
+            $this->log("[PUSH] $file");
         }
         $this->rmLocal($dir);
     }
@@ -314,7 +310,7 @@ class AdbSyncRetroArch extends AdbSync
                 $this->mkdirRemote($dstDir);
             }
             $this->push("$dir/$file", $dst);
-            $this->println("[PUSH] $file");
+            $this->log("[PUSH] $file");
         }
         $this->rmLocal($dir);
     }
@@ -401,27 +397,27 @@ class AdbSyncRetroArch extends AdbSync
             if (array_key_exists($dKey, $dstList)) {
                 $dData = $dstList[$dKey];
                 if ($comp($sData, $dData)) {
-                    $this->verbose && $this->println("[SAME] $sKey => $dKey");
+                    $this->verbose && $this->log("[SAME] $sKey => $dKey");
                     $c['s']++;
                 } else {
-                    $this->println("[UP] $sKey => $dKey");
+                    $this->log("[UP] $sKey => $dKey");
                     $this->rmRemote($this->dstPath . "/$topDir/$dKey");
                     $sync($topDir, $sData, $dKey);
                     $c['u']++;
                 }
             } else {
-                $this->println("[NEW] $sKey => $dKey");
+                $this->log("[NEW] $sKey => $dKey");
                 $sync($topDir, $sData, $dKey);
                 $c['n']++;
             }
             unset($dstList[$dKey]);
         }
         foreach (array_keys($dstList) as $key) {
-            $this->println("[DEL] $key");
+            $this->log("[DEL] $key");
             $this->rmRemote($this->dstPath . "/$topDir/$key");
             $c['d']++;
         }
-        $this->println(sprintf('NEW:%d, UP:%d, SAME:%d, DEL:%s', $c['n'], $c['u'], $c['s'], $c['d']));
+        $this->log(sprintf('NEW:%d, UP:%d, SAME:%d, DEL:%s', $c['n'], $c['u'], $c['s'], $c['d']));
     }
 
     private function getLocks(array $options): array
@@ -446,7 +442,7 @@ class AdbSyncRetroArch extends AdbSync
                 foreach ($files as $file) {
                     $date = $file[self::IDX_DATE];
                     if ($date < $th) {
-                        $this->debug && $this->println("[DEBUG] {$file[self::IDX_FILE]} is too old, $date < $th");
+                        $this->debug && $this->log("[DEBUG] {$file[self::IDX_FILE]} is too old, $date < $th");
                         continue;
                     }
                     $dirs = explode('/', $file[self::IDX_FILE]);
@@ -491,7 +487,7 @@ class AdbSyncRetroArch extends AdbSync
                 $excluded = false;
                 foreach ($excl as $ex) {
                     if (str_contains($k, $ex)) {
-                        $this->debug && $this->println("[EXCLUDE] $k");
+                        $this->debug && $this->log("[EXCLUDE] $k");
                         $excluded = true;
                         break;
                     }
@@ -515,14 +511,14 @@ class AdbSyncRetroArch extends AdbSync
             foreach ($list as $k => $v) {
                 foreach ($incl as $in) {
                     if (str_contains($k, $in)) {
-                        $this->debug && $this->println("[INCLUDE] $k");
+                        $this->debug && $this->log("[INCLUDE] $k");
                         $newList[$k] = $v;
                         break;
                     }
                 }
                 if (array_key_exists($this->trimArchiveExtension($k), $locks)) {
                     $newList[$k] = $v;
-                    $this->println("[LOCKED] $k");
+                    $this->log("[LOCKED] $k");
                 }
             }
         }
@@ -546,7 +542,7 @@ class AdbSyncRetroArch extends AdbSync
                     $newList[$key] = $srcList[$key];
                 }
             }
-            $this->println(sprintf('[RAND] %s files', number_format(count($newList))));
+            $this->log(sprintf('[RAND] %s files', number_format(count($newList))));
             return $newList;
         }
 
@@ -597,12 +593,11 @@ class AdbSyncRetroArch extends AdbSync
                 $filter($tmpKeys, $th);
             }
 
-            $this->println(sprintf('[RAND] %s bytes', number_format($sum)));
+            $this->log(sprintf('[RAND] %s bytes', number_format($sum)));
             return $newList;
         }
 
-        $this->errorln('ERROR: rand mode must have number or size option');
-        exit(1);
+        throw new Exception('rand mode must have number or size option');
     }
 
     private function isExtractable(array $filesInGame): bool
