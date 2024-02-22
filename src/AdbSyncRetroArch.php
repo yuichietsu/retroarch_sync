@@ -40,7 +40,7 @@ class AdbSyncRetroArch extends AdbSync
     public ?array $statesPaths = null;
     private ?array $lockedStates = null;
 
-    public string $diskFilter = '/^(.+)\\(Dis[kc] *\\d+\\)/';
+    public string $diskFilter = '/^(.+)\\(Dis[kc] *(\\d+|[A-Z])\\)/';
 
     public function __construct(
         protected string $remote,

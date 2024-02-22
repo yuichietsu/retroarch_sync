@@ -63,7 +63,7 @@ $sync->syncGames(
         '3do'    => 'rand:2g,excl(Hatou|Shokutaku|Shin-chan|Kitty|Menkyo|Kanji)',
         'dc'     => 'rand:2g,chd',
         'pcecd'  => 'rand:4g,chd,lock',
-        'pcfx'   => 'rand:2g,chd',
+        'pcfx'   => 'rand:2g,chd,disks',
         'psp'    => 'rand:2g,cso',
         'psx'    => 'rand:8g,chd,lock,disks',
         'quake'  => 'full',
