@@ -18,7 +18,7 @@ PCからAndroidにadbでファイルを転送するためのスクリプトで�
 # composer run sync -- diff /mnt/d/tmp/test 192.168.11.44:/storage/B42F-0FFA/test
 ```
 
-PCにだけファイルがある場合
+PCのみファイルがある場合
 
 ```
 [SRC ONLY]
@@ -27,7 +27,7 @@ file1.txt
 list.txt
 ```
 
-Androidにだけファイルがある場合
+Androidのみファイルがある場合
 
 ```
 [DST ONLY]
