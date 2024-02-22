@@ -50,7 +50,7 @@ try {
             'sf_turbo'      => 'full',
             'sms'           => 'full',
             'snes'          => 'full',
-            'tosec_psp'     => 'rand:2g,ext',
+            'tosec_psp'     => 'rand:2g,cso',
             'tosec_snes'    => 'full',
             'ws'            => 'full',
             'wsc'           => 'full',
@@ -63,10 +63,10 @@ try {
     $sync->syncGames(
         [
             '3do'    => 'rand:2g,excl(Hatou|Shokutaku|Shin-chan|Kitty|Menkyo|Kanji|Golf)',
-            'dc'     => 'rand:2g,ext',
+            'dc'     => 'rand:2g,chd',
             'pcecd'  => 'rand:4g,chd,lock',
             'pcfx'   => 'rand:2g,chd,disks',
-            'psp'    => 'rand:2g,ext',
+            'psp'    => 'rand:2g,cso',
             'psx'    => 'rand:8g,chd,lock,disks',
             'quake'  => 'full',
             'quake2' => 'full:ext',
