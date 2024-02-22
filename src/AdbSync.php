@@ -16,6 +16,8 @@ class AdbSync
     public ?string $srcPath = null;
     public ?string $dstPath = null;
 
+    public ?\Closure $logger = null;
+
     public array $commands = [
         'adb'  => 'adb',
         'find' => 'find',
@@ -28,27 +30,20 @@ class AdbSync
         $this->connect();
     }
 
-    protected function println(string|array $messages): void
+    protected function log(string|array $messages): void
     {
-        foreach (is_string($messages) ? [$messages] : $messages as $message) {
-            echo "$message\n";
-        }
-    }
-
-    protected function errorln(string|array $messages): void
-    {
-        foreach (is_string($messages) ? [$messages] : $messages as $message) {
-            fwrite(STDERR, "$message\n");
+        if ($this->logger !== null) {
+            foreach (is_string($messages) ? [$messages] : $messages as $message) {
+                call_user_func($this->logger, $message);
+            }
         }
     }
 
     public function connect(): void
     {
         exec(implode(' ', [$this->commands['adb'], 'connect', escapeshellarg($this->remote)]), $lines, $ret);
-        if ($ret !== 0) {
-            $this->errorln('ERROR: failed to connect adb server.');
-            $this->errorln($lines);
-            exit(1);
+        if ($ret !== 0 || str_contains(implode($lines), 'failed to connect')) {
+            throw new Exception(implode("\n", ['failed to connect adb server.', ...$lines]));
         }
     }
 
@@ -57,19 +52,17 @@ class AdbSync
         $srcPath && ($this->srcPath = $srcPath);
         $dstPath && ($this->dstPath = $dstPath);
         if (!$this->srcPath) {
-            $this->errorln('ERROR: srcPath is not specified.');
-            exit(1);
+            throw new Exception('srcPath is not specified.');
         }
         if (!$this->dstPath) {
-            $this->errorln('ERROR: dstPath is not specified.');
-            exit(1);
+            throw new Exception('dstPath is not specified.');
         }
     }
 
     public function execRemote(array $args = [], ?string $exitCond = null): array
     {
         $cmd = sprintf('%s shell "%s"', $this->commands['adb'], implode(' ', $args));
-        $this->debug && $this->println($cmd);
+        $this->debug && $this->log($cmd);
         return $this->retryExec($cmd, $exitCond);
     }
 
@@ -81,19 +74,19 @@ class AdbSync
             if ($ret === 0) {
                 return $outputs;
             } else {
-                $this->errorln("ERROR($retry): $cmd");
-                $this->errorln($outputs);
+                $this->log("ERROR($retry): $cmd");
+                $this->log($outputs);
                 if ($exitCond !== null) {
                     foreach ($outputs as $output) {
                         if (str_contains($output, $exitCond)) {
-                            exit(1);
+                            throw new Exception("Exit condition met: $exitCond");
                         }
                     }
                 }
             }
             sleep($this->retrySleep);
         }
-        exit(1);
+        throw new Exception('Reached retry limit');
     }
 
     public function push(string $localFile, string $remoteDir): array
@@ -105,7 +98,7 @@ class AdbSync
             escapeshellarg($localFile),
             escapeshellarg($remoteDir),
         );
-        $this->debug && $this->println($cmd);
+        $this->debug && $this->log($cmd);
         return $this->retryExec($cmd);
     }
 
@@ -129,10 +122,11 @@ class AdbSync
     protected function checkRemotePath(string $path): void
     {
         if (!str_starts_with($path, $this->dstPath)) {
-            $this->errorln('ERROR: Remote path must be within the base directory to be removed.');
-            $this->errorln($path);
-            $this->errorln("base : {$this->dstPath}");
-            exit(1);
+            throw new Exception(implode("\n", [
+                'Remote path must be within the base directory to be removed.',
+                $path,
+                "base : {$this->dstPath}",
+            ]));
         }
     }
 
@@ -142,8 +136,7 @@ class AdbSync
         $cmd = sprintf('%s %s -mindepth 1 -type d', $this->commands['find'], escapeshellarg($scanDir));
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
-            $this->errorln("ERROR: $cmd");
-            exit(1);
+            throw new Exception($cmd);
         }
         return $this->listCore($scanDir, $lines, self::LIST_NONE);
     }
@@ -171,8 +164,7 @@ class AdbSync
         $cmd = "{$this->commands['find']} $args";
         exec($cmd, $lines, $ret);
         if ($ret !== 0) {
-            $this->errorln("ERROR: $cmd");
-            exit(1);
+            throw new Exception($cmd);
         }
         return $this->listCore($scanDir, $lines, $mode);
     }
@@ -244,11 +236,12 @@ class AdbSync
             return $this->md5Remote($path);
         }
 
-        $this->errorln('ERROR: File for MD5 is not within srcPath or dstPath.');
-        $this->errorln($path);
-        $this->errorln("srcPath : {$this->srcPath}");
-        $this->errorln("dstPath : {$this->dstPath}");
-        exit(1);
+        throw new Exception(implode("\n", [
+            'File for MD5 is not within srcPath or dstPath.',
+            $path,
+            "srcPath : {$this->srcPath}",
+            "dstPath : {$this->dstPath}",
+        ]));
     }
 
     protected function md5Local(string $path): string
@@ -264,10 +257,10 @@ class AdbSync
     private function printDiffList(array $list, string $title = null, string $prefix = '', string $suffix = ''): void
     {
         if (count($list) > 0) {
-            $title && $this->println($title);
+            $title && $this->log($title);
             ksort($list);
             foreach ($list as $file) {
-                $this->println("$prefix$file$suffix");
+                $this->log("$prefix$file$suffix");
             }
         }
     }
@@ -318,7 +311,7 @@ class AdbSync
         $srcOnly = array_keys(array_diff_key($srcList, $dstList));
         foreach ($srcOnly as $file) {
             [$src, $dst] = $this->pushFile($file);
-            $this->println("[SEND] $src => $dst");
+            $this->log("[SEND] $src => $dst");
         }
 
         $srcDirs = $this->dirsLocal($this->srcPath);
@@ -327,7 +320,7 @@ class AdbSync
         foreach ($srcOnly as $dir) {
             $path = $this->dstPath . "/$dir";
             $this->mkdirRemote($path);
-            $this->println("[MKDIR] $path");
+            $this->log("[MKDIR] $path");
         }
         return [$srcList, $dstList];
     }
@@ -338,7 +331,7 @@ class AdbSync
         foreach (array_keys(array_intersect_key($srcList, $dstList)) as $key) {
             if ($srcList[$key] !== $dstList[$key]) {
                 [$src, $dst] = $this->pushFile($key);
-                $this->println("[UPDATE] $src => $dst");
+                $this->log("[UPDATE] $src => $dst");
             }
         }
         return [$srcList, $dstList];
@@ -351,7 +344,7 @@ class AdbSync
         foreach ($dstOnly as $file) {
             $path = $this->dstPath . "/$file";
             $this->rmRemote($path);
-            $this->println("[DELETE] $path");
+            $this->log("[DELETE] $path");
         }
 
         $srcDirs = $this->dirsLocal($this->srcPath);
@@ -360,7 +353,7 @@ class AdbSync
         foreach ($dstOnly as $dir) {
             $path = $this->dstPath . "/$dir";
             $this->rmRemote($path);
-            $this->println("[RMDIR] $path");
+            $this->log("[RMDIR] $path");
         }
         return [$srcList, $dstList];
     }

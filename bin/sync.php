@@ -15,11 +15,19 @@ function main(array $argv): int
         'srcPath' => $srcPath,
         'dstPath' => $dstPath,
     ] = parseArgs($argv);
-    $adbSync = new \Menrui\AdbSync($remote);
-    $adbSync->srcPath = $srcPath;
-    $adbSync->dstPath = $dstPath;
-    $adbSync->$cmd();
-    return 0;
+
+    try {
+        $adbSync = new \Menrui\AdbSync($remote);
+        $adbSync->logger  = fn ($msg) => print("$msg\n");
+        $adbSync->srcPath = $srcPath;
+        $adbSync->dstPath = $dstPath;
+        $adbSync->$cmd();
+        return 0;
+    } catch (\Menrui\Exception $e) {
+        $error = $e->getMessage();
+        fwrite(STDERR, "ERROR: $error\n");
+        return 1;
+    }
 }
 
 function parseArgs(array $argv): array
