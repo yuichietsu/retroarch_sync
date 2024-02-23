@@ -61,7 +61,7 @@ class AdbSync
 
     public function execRemote(array $args = [], ?string $exitCond = null): array
     {
-        $cmd = sprintf('%s shell "%s"', $this->commands['adb'], implode(' ', $args));
+        $cmd = sprintf('%s shell %s', $this->commands['adb'], escapeshellarg(implode(' ', $args)));
         $this->debug && $this->log($cmd);
         return $this->retryExec($cmd, $exitCond);
     }
