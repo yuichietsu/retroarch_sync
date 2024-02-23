@@ -3,7 +3,9 @@
     "description": "send files to android using adb",
     "type": "project",
     "license": "MIT",
-    "require": {},
+    "require": {
+        "menrui/menrui": "*"
+    },
     "scripts": {
         "sync": "bin/sync.php"
     },
