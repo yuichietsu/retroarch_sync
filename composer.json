@@ -5,6 +5,7 @@
     "license": "MIT",
     "require": {
         "menrui/menrui": "*"
+        "menrui/ccd2cue": "*"
     },
     "scripts": {
         "sync": "bin/sync.php"
