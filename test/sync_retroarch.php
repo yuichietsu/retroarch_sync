@@ -58,6 +58,7 @@ try {
             'snes'          => 'full',
             'st'            => 'full',
             'tosec_adf'     => 'full',
+            'tosec_amigacd' => 'rand:4g',
             'tosec_psp'     => 'rand:8g,cso',
             'tosec_snes'    => 'full',
             'vb'            => 'full',
@@ -74,6 +75,8 @@ try {
         [
             '3do'    => 'rand:2g,excl(Hatou|Shokutaku|Shin-chan|Kitty|Menkyo|Kanji|Golf)',
             'dc'     => 'rand:2g,chd',
+            'doom'   => 'full:excl(music)',
+            'dos'    => 'rand:1g',
             'pcecd'  => 'rand:4g,chd,lock',
             'pcfx'   => 'rand:2g,chd,disks',
             'psp'    => 'rand:8g,cso',
