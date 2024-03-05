@@ -27,6 +27,7 @@ try {
             'c64_pp'        => 'full',
             'c64_tapes'     => 'full',
             'col'           => 'full',
+            'doom'          => 'full',
             'fds'           => 'full',
             'gb'            => 'full',
             'gba'           => 'full',
