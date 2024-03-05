@@ -6,16 +6,16 @@ ob_implicit_flush();
 
 try {
     $sync = new \Menrui\AdbSyncRetroArch(
-        '192.168.11.44:5555',
+        '192.168.11.51:5555',
     );
     $sync->logger = fn ($message) => print("$message\n");
 
     $sync->statesPaths = [
-        '/storage/emulated/0/RetroArch/states',
+        '/storage/32BB-1E05/RetroArch/states',
     ];
 
     $sync->srcPath = '/mnt/d/files/roms/rebuild';
-    $sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM';
+    $sync->dstPath = '/storage/32BB-1E05/RetroArch/ROM';
     $sync->syncGames(
         [
             '32x'           => 'full',
@@ -70,12 +70,11 @@ try {
     );
 
     $sync->srcPath = '/mnt/d/files/roms/src';
-    $sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM/src';
+    $sync->dstPath = '/storage/32BB-1E05/RetroArch/ROM/src';
     $sync->syncGames(
         [
             '3do'    => 'rand:2g,excl(Hatou|Shokutaku|Shin-chan|Kitty|Menkyo|Kanji|Golf)',
             'dc'     => 'rand:2g,chd',
-            'doom'   => 'full:excl(music)',
             'dos'    => 'rand:1g',
             'pcecd'  => 'rand:4g,chd,lock',
             'pcfx'   => 'rand:2g,chd,disks',
