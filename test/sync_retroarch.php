@@ -74,7 +74,7 @@ try {
     $sync->dstPath = '/storage/32BB-1E05/RetroArch/ROM/src';
     $sync->syncGames(
         [
-            '3do'    => 'rand:2g,excl(Hatou|Shokutaku|Shin-chan|Kitty|Menkyo|Kanji|Golf)',
+            '3do'    => 'rand:2g,excl(Hatou|Shokutaku|Shin-chan|Kitty|Menkyo|Kanji|Golf|Audio)',
             'dc'     => 'rand:2g,chd',
             'dos'    => 'rand:1g',
             'pcecd'  => 'rand:4g,chd,lock',
@@ -83,7 +83,7 @@ try {
             'psx'    => 'rand:8g,chd,lock,disks',
             'quake'  => 'full',
             'quake2' => 'full:ext',
-            'saturn' => 'rand:2g,chd.disks',
+            'saturn' => 'rand:2g,chd,disks',
             'segacd' => 'rand:2g,chd,disks',
             'tr'     => 'full',
         ],
