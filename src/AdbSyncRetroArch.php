@@ -707,9 +707,4 @@ class AdbSyncRetroArch extends AdbSync
         }
         return $list;
     }
-
-    protected function catRemote(string $path): string
-    {
-        return implode($this->execRemote(['cat', escapeshellarg($path)]));
-    }
 }
