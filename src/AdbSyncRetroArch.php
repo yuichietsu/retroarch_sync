@@ -39,6 +39,8 @@ class AdbSyncRetroArch extends AdbSync
     public int $lockDays = 14;
     public ?array $statesPaths = null;
     private ?array $lockedStates = null;
+    public ?array $favoritesPaths = null;
+    private ?array $lockedFavorites = null;
 
     public string $diskFilter = '/^(.+)\\(Dis[kc] *(\\d+|[A-Z])\\)/';
 
@@ -422,14 +424,40 @@ class AdbSyncRetroArch extends AdbSync
 
     private function getLocks(array $options): array
     {
-        $statesDir = $options['lock'] ?? false;
-        if (!$this->statesPaths || !$statesDir) {
+        $dir = $options['lock'] ?? false;
+        if (!$dir) {
             return [];
         }
-        if ($this->lockedStates === null) {
+        if ($this->statesPaths && $this->lockedStates === null) {
             $this->lockedStates = $this->loadLockedStates();
         }
-        return $this->lockedStates[$statesDir] ?? [];
+        if ($this->favoritesPaths && $this->lockedFavorites === null) {
+            $this->lockedFavorites = $this->loadLockedFavorites();
+        }
+        return array_merge(
+            $this->lockedStates[$dir] ?? [],
+            $this->lockedFavorites[$dir] ?? [],
+        );
+    }
+
+    private function loadLockedFavorites(): array
+    {
+        $locks = [];
+        $pattern = preg_quote(rtrim($this->dstPath, '/'), '%');
+        foreach ($this->favoritesPaths as $fPath) {
+            $data = $this->catRemote($fPath);
+            if ($json = @json_decode($data, true)) {
+                foreach ($json['items'] as $item) {
+                    if (preg_match("%^{$pattern}/([^/]+)/(.+)$%", $item['path'], $m)) {
+                        $dir  = $m[1];
+                        $game = preg_replace('%[\\./].+$%', '', $m[2]);
+                        $locks['*'][$game]  = true;
+                        $locks[$dir][$game] = true;
+                    }
+                }
+            }
+        }
+        return $locks;
     }
 
     private function loadLockedStates(): array
@@ -677,5 +705,10 @@ class AdbSyncRetroArch extends AdbSync
             }
         }
         return $list;
+    }
+
+    protected function catRemote(string $path): string
+    {
+        return implode($this->execRemote(['cat', escapeshellarg($path)]));
     }
 }

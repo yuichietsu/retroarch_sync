@@ -14,6 +14,10 @@ try {
         '/storage/32BB-1E05/RetroArch/states',
     ];
 
+    $sync->favoritesPaths = [
+        '/storage/32BB-1E05/RetroArch/content_favorites.lpl',
+    ];
+
     if (($argv[3] ?? false) === 'src') {
         $sync->srcPath = '/mnt/d/files/roms/src';
         $sync->dstPath = '/storage/32BB-1E05/RetroArch/ROM/src';
