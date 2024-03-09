@@ -62,6 +62,7 @@ try {
             'tosec_psp'     => 'rand:8g,cso',
             'tosec_snes'    => 'full',
             'tosec_st'      => 'full',
+            'tosec_stx'     => 'full',
             'vb'            => 'full',
             'vic20'         => 'full',
             'ws'            => 'full',
