@@ -563,11 +563,12 @@ class AdbSyncRetroArch extends AdbSync
 
         if ($num = ($options['num'] ?? false)) {
             $newList = $this->filterInclude($srcList, $options);
-            $randNum = min(count($srcList), $num) - count($newList);
+            $leftList = array_diff_key($srcList, $newList);
+            $randNum = min(count($leftList), $num - count($newList));
             if (0 < $randNum) {
-                $keys    = array_rand($srcList, $randNum);
+                $keys = array_rand($leftList, $randNum);
                 foreach (is_array($keys) ? $keys : [$keys] as $key) {
-                    $newList[$key] = $srcList[$key];
+                    $newList[$key] = $leftList[$key];
                 }
             }
             $this->log(sprintf('[RAND] %s files', number_format(count($newList))));
