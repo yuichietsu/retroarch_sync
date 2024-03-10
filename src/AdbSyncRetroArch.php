@@ -117,16 +117,33 @@ class AdbSyncRetroArch extends AdbSync
                     continue;
                 }
                 $mode = $options['mode'] === 'full' ? self::LIST_HASH : self::LIST_NONE;
-                $this->mkdirRemote($this->dstPath . "/$dir");
                 $srcList = $this->listLocal($this->srcPath . "/$dir", $mode);
                 $srcList = $this->filterSrcList($srcList, $options);
-                $dstList = $this->listRemote($this->dstPath . "/$dir", $mode);
-                $this->syncCore($dir, $srcList, $dstList, $options);
-                $this->makeM3U($dir, $options);
+                if ($options['index'] ?? false) {
+                    $az = [];
+                    foreach ($srcList as $k => $v) {
+                        $i = preg_match('/^([a-zA-Z])/', $k, $m) ? strtoupper($m[1]) : '_';
+                        $az[$i][$k] = $v;
+                    }
+                    foreach ($az as $i => $srcList) {
+                        $this->log("[INDEX] $i");
+                        $this->syncDir("$dir/$i", $srcList, $options, $mode);
+                    }
+                } else {
+                    $this->syncDir($dir, $srcList, $options, $mode);
+                }
             } else {
                 $this->verbose && $this->log("[SKIP] $dir");
             }
         }
+    }
+
+    private function syncDir(string $dir, array $srcList, array $options, int $mode): void
+    {
+        $this->mkdirRemote($this->dstPath . "/$dir");
+        $dstList = $this->listRemote($this->dstPath . "/$dir", $mode);
+        $this->syncCore($dir, $srcList, $dstList, $options);
+        $this->makeM3U($dir, $options);
     }
 
     private function sendM3U(string $topDir, array $m3u): void
