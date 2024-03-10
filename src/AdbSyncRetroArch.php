@@ -42,7 +42,7 @@ class AdbSyncRetroArch extends AdbSync
     public ?array $favoritesPaths = null;
     private ?array $lockedFavorites = null;
 
-    public string $diskFilter = '/^(.+)\\(Dis[kc] *(\\d+|[A-Z])\\)/';
+    public string $diskFilter = '/^(.+)\\(Dis[kc] *(\\d+|[A-Z])( of \\d+)?\\)/';
 
     public function __construct(
         protected string $remote,
