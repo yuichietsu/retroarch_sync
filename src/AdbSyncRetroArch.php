@@ -83,10 +83,12 @@ class AdbSyncRetroArch extends AdbSync
                     };
                 } elseif (preg_match('/^lock(\\(.*\\))?$/', $i, $im)) {
                     $options['lock'] = strtolower(trim($im[1] ?? '*', '()'));
-                } elseif (preg_match('/^incl(\\(.*\\))?$/', $i, $im)) {
+                } elseif (preg_match('/^incl(\\(.*\\))$/', $i, $im)) {
                     $options['incl'] = explode('|', trim($im[1], '()'));
-                } elseif (preg_match('/^excl(\\(.*\\))?$/', $i, $im)) {
+                } elseif (preg_match('/^excl(\\(.*\\))$/', $i, $im)) {
                     $options['excl'] = explode('|', trim($im[1], '()'));
+                } elseif (preg_match('/^merge(\\(.*\\))?$/', $i, $im)) {
+                    $options['merge'] = strtolower(trim($im[1] ?? 'max', '()'));
                 } else {
                     $options[$i] = true;
                 }
@@ -530,6 +532,40 @@ class AdbSyncRetroArch extends AdbSync
         }
     }
 
+    private function mergeVariants(array $list, array $options): array
+    {
+        if ($cond = ($options['merge'] ?? false)) {
+            $newList = [];
+            $keyList = [];
+            foreach (array_keys($list) as $k) {
+                $key = preg_replace('/\\s*\\[.*?\\]\\s*/', '', $k);
+                $keyList[$key][] = $k;
+            }
+            foreach ($keyList as $keys) {
+                if (count($keys) > 1) {
+                    usort($keys, function ($a, $b) {
+                        $d = strlen($a) - strlen($b);
+                        return $d === 0 ? strcmp($a, $b) : $d;
+                    });
+                }
+                $k = match ($cond) {
+                    'min'   => array_shift($keys),
+                    default => array_pop($keys),
+                };
+                $newList[$k] = $list[$k];
+                if (0 < count($keys)) {
+                    $this->log("[MERGED] $k");
+                    foreach ($keys as $k) {
+                        $this->log("         $k");
+                    }
+                }
+            }
+            return $newList;
+        } else {
+            return $list;
+        }
+    }
+
     private function filterInclude(array $list, array $options): array
     {
         $newList = [];
@@ -556,6 +592,7 @@ class AdbSyncRetroArch extends AdbSync
     private function filterSrcList(array $srcList, array $options): array
     {
         $srcList = $this->filterExclude($srcList, $options);
+        $srcList = $this->mergeVariants($srcList, $options);
 
         if ($options['mode'] === 'full') {
             return $srcList;
