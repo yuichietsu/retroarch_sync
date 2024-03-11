@@ -129,6 +129,16 @@ class AdbSyncRetroArch extends AdbSync
                         $this->log("[INDEX] $i");
                         $this->syncDir("$dir/$i", $srcList, $options, $mode);
                     }
+                    $this->log("[CLEAN]");
+                    $children = $this->listChildrenRemote($this->dstPath . "/$dir");
+                    foreach ($children as $k => $v) {
+                        if (!array_key_exists($k, $az)) {
+                            [$vv] = $v;
+                            $path = $vv[self::IDX_PATH];
+                            $this->log("[DEL] $k");
+                            $this->rmRemote($path);
+                        }
+                    }
                 } else {
                     $this->syncDir($dir, $srcList, $options, $mode);
                 }
@@ -760,5 +770,17 @@ class AdbSyncRetroArch extends AdbSync
             }
         }
         return $list;
+    }
+
+    protected function listChildrenRemote(string $scanDir): array
+    {
+        $cmd = [
+            'find',
+            escapeshellarg($scanDir),
+            '-mindepth 1',
+            '-maxdepth 1',
+        ];
+        $lines = $this->execRemote($cmd, 'No such file or directory');
+        return $this->listCore($scanDir, $lines, self::LIST_NONE);
     }
 }
