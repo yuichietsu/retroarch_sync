@@ -771,16 +771,4 @@ class AdbSyncRetroArch extends AdbSync
         }
         return $list;
     }
-
-    protected function listChildrenRemote(string $scanDir): array
-    {
-        $cmd = [
-            'find',
-            escapeshellarg($scanDir),
-            '-mindepth 1',
-            '-maxdepth 1',
-        ];
-        $lines = $this->execRemote($cmd, 'No such file or directory');
-        return $this->listCore($scanDir, $lines, self::LIST_NONE);
-    }
 }
