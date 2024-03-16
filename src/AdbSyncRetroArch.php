@@ -9,6 +9,17 @@ class AdbSyncRetroArch extends AdbSync
     private const IDX_HASH = 2;
     private const IDX_DATE = 2;
 
+    private const TAG_SCORE = [
+        'cr' => 100, // crack
+        'b'  =>  -1, // bootleg
+        'a'  =>  -2, // alternative
+        'p'  =>  -3, // prototype
+        'h'  =>  -4, // hack
+        'm'  =>  -4, // modification
+        'tr' =>  -5, // translation or trainer
+        't'  =>  -5, // translation or trainer
+    ];
+
     public array $archivers = [
         'zip' => [
             'c' => 'zip -9 %TO% %FROM%',
@@ -87,8 +98,8 @@ class AdbSyncRetroArch extends AdbSync
                     $options['incl'] = explode('|', trim($im[1], '()'));
                 } elseif (preg_match('/^excl(\\(.*\\))$/', $i, $im)) {
                     $options['excl'] = explode('|', trim($im[1], '()'));
-                } elseif (preg_match('/^merge(\\(.*\\))?$/', $i, $im)) {
-                    $options['merge'] = strtolower(trim($im[1] ?? 'max', '()'));
+                } elseif (preg_match('/^1g1r(\\(.*\\))?$/', $i, $im)) {
+                    $options['1g1r'] = strtolower(trim($im[1] ?? 'default', '()'));
                 } elseif (preg_match('/^rename(\\(.*\\))$/', $i, $im)) {
                     $options['rename'] = trim($im[1], '()/');
                 } else {
@@ -562,9 +573,19 @@ class AdbSyncRetroArch extends AdbSync
         }
     }
 
+    private function rank1g1r(string $name): int
+    {
+        preg_match_all('/\\[(h|cr|tr|m|a|b|p|t)[ \\d\\]]/', $name, $m);
+        $rank = 0;
+        foreach ($m[1] as $tag) {
+            $rank += self::TAG_SCORE[$tag];
+        }
+        return $rank;
+    }
+
     private function mergeVariants(array $list, array $options): array
     {
-        if ($cond = ($options['merge'] ?? false)) {
+        if ($cond = ($options['1g1r'] ?? false)) {
             $newList = [];
             $keyList = [];
             foreach (array_keys($list) as $k) {
@@ -574,14 +595,17 @@ class AdbSyncRetroArch extends AdbSync
             foreach ($keyList as $keys) {
                 if (count($keys) > 1) {
                     usort($keys, function ($a, $b) {
+                        $ra = $this->rank1g1r($a);
+                        $rb = $this->rank1g1r($b);
+                        $dr = $ra - $rb;
+                        if ($dr !== 0) {
+                            return $dr;
+                        }
                         $d = strlen($a) - strlen($b);
                         return $d === 0 ? strcmp($a, $b) : $d;
                     });
                 }
-                $k = match ($cond) {
-                    'min'   => array_shift($keys),
-                    default => array_pop($keys),
-                };
+                $k = array_pop($keys);
                 $newList[$k] = $list[$k];
                 if (0 < count($keys)) {
                     $this->log("[MERGED] $k");
@@ -623,6 +647,7 @@ class AdbSyncRetroArch extends AdbSync
     {
         $srcList = $this->filterExclude($srcList, $options);
         $srcList = $this->mergeVariants($srcList, $options);
+        exit();
 
         if ($options['mode'] === 'full') {
             return $srcList;
