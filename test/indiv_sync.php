@@ -9,11 +9,9 @@ try {
         '192.168.11.51:5555',
     );
     $sync->logger = fn ($message) => print("$message\n");
-
     $sync->statesPaths = [
         '/storage/32BB-1E05/RetroArch/states',
     ];
-
     $sync->favoritesPaths = [
         '/storage/32BB-1E05/RetroArch/content_favorites.lpl',
     ];
