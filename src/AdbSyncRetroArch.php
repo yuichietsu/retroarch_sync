@@ -89,6 +89,8 @@ class AdbSyncRetroArch extends AdbSync
                     $options['excl'] = explode('|', trim($im[1], '()'));
                 } elseif (preg_match('/^merge(\\(.*\\))?$/', $i, $im)) {
                     $options['merge'] = strtolower(trim($im[1] ?? 'max', '()'));
+                } elseif (preg_match('/^rename(\\(.*\\))$/', $i, $im)) {
+                    $options['rename'] = trim($im[1], '()/');
                 } else {
                     $options[$i] = true;
                 }
@@ -116,7 +118,8 @@ class AdbSyncRetroArch extends AdbSync
                     $this->log("[SKIP] invalid settings : $settings");
                     continue;
                 }
-                $mode = $options['mode'] === 'full' ? self::LIST_HASH : self::LIST_NONE;
+                $dstDir  = $options['rename'] ?? $dir;
+                $mode    = $options['mode'] === 'full' ? self::LIST_HASH : self::LIST_NONE;
                 $srcList = $this->listLocal($this->srcPath . "/$dir", $mode);
                 $srcList = $this->filterSrcList($srcList, $options);
                 if ($options['index'] ?? false) {
@@ -127,10 +130,10 @@ class AdbSyncRetroArch extends AdbSync
                     }
                     foreach ($az as $i => $srcList) {
                         $this->log("[INDEX] $i");
-                        $this->syncDir("$dir/$i", $srcList, $options, $mode);
+                        $this->syncDir("$dstDir/$i", $srcList, $options, $mode);
                     }
                     $this->log("[CLEAN]");
-                    $children = $this->listChildrenRemote($this->dstPath . "/$dir");
+                    $children = $this->listChildrenRemote($this->dstPath . "/$dstDir");
                     foreach ($children as $k => $v) {
                         if (!array_key_exists($k, $az)) {
                             [$vv] = $v;
@@ -140,7 +143,7 @@ class AdbSyncRetroArch extends AdbSync
                         }
                     }
                 } else {
-                    $this->syncDir($dir, $srcList, $options, $mode);
+                    $this->syncDir($dstDir, $srcList, $options, $mode);
                 }
             } else {
                 $this->verbose && $this->log("[SKIP] $dir");
