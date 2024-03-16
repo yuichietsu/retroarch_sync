@@ -19,6 +19,20 @@ class AdbSyncRetroArch extends AdbSync
         'tr' =>  -5, // translation or trainer
         't'  =>  -5, // translation or trainer
     ];
+    private const REGIONS = [
+        'usa',
+        'europe',
+        'spain',
+        'france',
+        'germany',
+        'brazil',
+        'japan',
+        'world',
+        'us',
+        'eu',
+        'jp',
+        'kr',
+    ];
 
     public array $archivers = [
         'zip' => [
@@ -99,7 +113,10 @@ class AdbSyncRetroArch extends AdbSync
                 } elseif (preg_match('/^excl(\\(.*\\))$/', $i, $im)) {
                     $options['excl'] = explode('|', trim($im[1], '()'));
                 } elseif (preg_match('/^1g1r(\\(.*\\))?$/', $i, $im)) {
-                    $options['1g1r'] = strtolower(trim($im[1] ?? 'default', '()'));
+                    $options['1g1r'] = explode(
+                        '|',
+                        strtolower(trim($im[1] ?? 'japan|jp|asia|world|usa|us|europe|eu', '()'))
+                    );
                 } elseif (preg_match('/^rename(\\(.*\\))$/', $i, $im)) {
                     $options['rename'] = trim($im[1], '()/');
                 } else {
@@ -573,12 +590,44 @@ class AdbSyncRetroArch extends AdbSync
         }
     }
 
-    private function rank1g1r(string $name): int
+    private function rank1g1r(string $name, array $cond): int
     {
         preg_match_all('/\\[(h|cr|tr|m|a|b|p|t)[ \\d\\]]/', $name, $m);
         $rank = 0;
         foreach ($m[1] as $tag) {
             $rank += self::TAG_SCORE[$tag];
+        }
+        if (preg_match('/\\(rev (\\d+)\\)/i', $name, $mr)) {
+            $rank += $mr[1] * 10 ** 3;
+        }
+        if (preg_match('/\\([^\\(\\)]*virtual console\\)/i', $name)) {
+            $rank -= 10 ** 4;
+        }
+        if (preg_match('/\\(en\\)/i', $name)) {
+            $rank -= 2 * 10 ** 4;
+        }
+        if (preg_match('/\\(alt( \\d+)?\\)/i', $name)) {
+            $rank -= 3 * 10 ** 4;
+        }
+        $regionScore = count($cond);
+        foreach ($cond as $c) {
+            if (preg_match("/\\($c([,\\-][^\\)]+)?\\)/i", $name)) {
+                $rank += $regionScore * 10 ** 5;
+                break;
+            }
+            $regionScore--;
+        }
+        if (preg_match('/\\(unl\\)/i', $name)) {
+            $rank -= 10 ** 6;
+        }
+        if (preg_match('/\\(pirate\\)/i', $name)) {
+            $rank -= 2 * 10 ** 6;
+        }
+        if (preg_match('/\\(beta( \\d+)?\\)/i', $name)) {
+            $rank -= 10 ** 7;
+        }
+        if (preg_match('/\\((demo|proto|sample)\\)/i', $name)) {
+            $rank -= 2 * 10 ** 7;
         }
         return $rank;
     }
@@ -588,15 +637,27 @@ class AdbSyncRetroArch extends AdbSync
         if ($cond = ($options['1g1r'] ?? false)) {
             $newList = [];
             $keyList = [];
+            $regions = implode('|', self::REGIONS);
             foreach (array_keys($list) as $k) {
                 $key = preg_replace('/\\s*\\[.*?\\]\\s*/', '', $k);
+                $key = preg_replace("/\\s*\\(($regions)([,\\-][^\\)]+)?\\)\\s*/i", '', $key);
+                $key = preg_replace("/\\s*\\(rev \\d+\\)\\s*/i", '', $key);
+                $key = preg_replace("/\\s*\\(alt( \\d+)?\\)\\s*/i", '', $key);
+                $key = preg_replace("/\\s*\\(beta( \\d+)?\\)\\s*/i", '', $key);
+                $key = preg_replace("/\\s*\\((demo|proto|sample|[^\\(\\)]*virtual console)\\)\\s*/i", '', $key);
+                $key = preg_replace("/\\s*\\(en\\)\\s*/i", '', $key);
+                $key = preg_replace("/\\s*\\((19|20)\\d{2}-\\d{2}-\\d{2}\\)\\s*/i", '', $key);
+                $key = preg_replace("/\\s*\\(v\\d+(\\.\\d+)?\\)\\s*/i", '', $key);
+                if (preg_match('/\\((pirate|unl)\\)/i', $key)) {
+                    $key = preg_replace("/\\s*\\(.+\\)\\s*/i", '', $key);
+                }
                 $keyList[$key][] = $k;
             }
             foreach ($keyList as $keys) {
                 if (count($keys) > 1) {
-                    usort($keys, function ($a, $b) {
-                        $ra = $this->rank1g1r($a);
-                        $rb = $this->rank1g1r($b);
+                    usort($keys, function ($a, $b) use ($cond) {
+                        $ra = $this->rank1g1r($a, $cond);
+                        $rb = $this->rank1g1r($b, $cond);
                         $dr = $ra - $rb;
                         if ($dr !== 0) {
                             return $dr;
