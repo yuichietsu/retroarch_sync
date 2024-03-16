@@ -44,6 +44,7 @@ try {
             'lnx'           => 'full:rename(lynx/lnx)',
             'lyx'           => 'full:rename(lynx/lyx)',
             'mame'          => 'rand:4g',
+            'megaduck'      => 'full',
             'md'            => 'full:index',
             'msx'           => 'full',
             'msx2'          => 'full',

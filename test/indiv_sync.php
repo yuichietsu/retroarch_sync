@@ -18,11 +18,10 @@ try {
 
     if (($argv[3] ?? false) === 'src') {
         $sync->srcPath = '/mnt/d/files/roms/src';
-        $sync->dstPath = '/storage/32BB-1E05/RetroArch/ROM/src';
     } else {
         $sync->srcPath = '/mnt/d/files/roms/rebuild';
-        $sync->dstPath = '/storage/32BB-1E05/RetroArch/ROM';
     }
+    $sync->dstPath = '/storage/32BB-1E05/RetroArch/ROM';
     $sync->syncGames([$argv[1] => $argv[2]]);
 } catch (\Menrui\Exception $e) {
     $error = $e->getMessage();
