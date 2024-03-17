@@ -669,7 +669,7 @@ class AdbSyncRetroArch extends AdbSync
                 $k = array_pop($keys);
                 $newList[$k] = $list[$k];
                 if (0 < count($keys)) {
-                    $this->log("[MERGED] $k");
+                    $this->log("[1G1R] $k");
                     foreach ($keys as $k) {
                         $this->log("         $k");
                     }
