@@ -679,7 +679,7 @@ class AdbSyncRetroArch extends AdbSync
                 if (0 < count($keys)) {
                     $this->log("[1G1R] $k");
                     foreach ($keys as $k) {
-                        $this->log("         $k");
+                        $this->log("       $k");
                     }
                 }
             }
