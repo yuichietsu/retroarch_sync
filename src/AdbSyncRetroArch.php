@@ -590,6 +590,27 @@ class AdbSyncRetroArch extends AdbSync
         }
     }
 
+    private function normalize1g1r(string $name): string
+    {
+        static $regions = null;
+        if ($regions === null) {
+            $regions = implode('|', self::REGIONS);
+        }
+        $name = preg_replace('/\\s*\\[.*?\\]\\s*/', '', $name);
+        $name = preg_replace("/\\s*\\(($regions)([,\\-][^\\)]+)?\\)\\s*/i", '', $name);
+        $name = preg_replace("/\\s*\\(rev \\d+\\)\\s*/i", '', $name);
+        $name = preg_replace("/\\s*\\(alt( \\d+)?\\)\\s*/i", '', $name);
+        $name = preg_replace("/\\s*\\(beta( \\d+)?\\)\\s*/i", '', $name);
+        $name = preg_replace("/\\s*\\((demo|proto|sample|[^\\(\\)]*virtual console)\\)\\s*/i", '', $name);
+        $name = preg_replace("/\\s*\\(en\\)\\s*/i", '', $name);
+        $name = preg_replace("/\\s*\\((19|20)\\d{2}-\\d{2}-\\d{2}\\)\\s*/i", '', $name);
+        $name = preg_replace("/\\s*\\(v\\d+(\\.\\d+)?\\)\\s*/i", '', $name);
+        if (preg_match('/\\((pirate|unl)\\)/i', $name)) {
+            $name = preg_replace("/\\s*\\(.+\\)\\s*/i", '', $name);
+        }
+        return $name;
+    }
+
     private function rank1g1r(string $name, array $cond): int
     {
         preg_match_all('/\\[(h|cr|tr|m|a|b|p|t)[ \\d\\]]/', $name, $m);
@@ -637,21 +658,8 @@ class AdbSyncRetroArch extends AdbSync
         if ($cond = ($options['1g1r'] ?? false)) {
             $newList = [];
             $keyList = [];
-            $regions = implode('|', self::REGIONS);
             foreach (array_keys($list) as $k) {
-                $key = preg_replace('/\\s*\\[.*?\\]\\s*/', '', $k);
-                $key = preg_replace("/\\s*\\(($regions)([,\\-][^\\)]+)?\\)\\s*/i", '', $key);
-                $key = preg_replace("/\\s*\\(rev \\d+\\)\\s*/i", '', $key);
-                $key = preg_replace("/\\s*\\(alt( \\d+)?\\)\\s*/i", '', $key);
-                $key = preg_replace("/\\s*\\(beta( \\d+)?\\)\\s*/i", '', $key);
-                $key = preg_replace("/\\s*\\((demo|proto|sample|[^\\(\\)]*virtual console)\\)\\s*/i", '', $key);
-                $key = preg_replace("/\\s*\\(en\\)\\s*/i", '', $key);
-                $key = preg_replace("/\\s*\\((19|20)\\d{2}-\\d{2}-\\d{2}\\)\\s*/i", '', $key);
-                $key = preg_replace("/\\s*\\(v\\d+(\\.\\d+)?\\)\\s*/i", '', $key);
-                if (preg_match('/\\((pirate|unl)\\)/i', $key)) {
-                    $key = preg_replace("/\\s*\\(.+\\)\\s*/i", '', $key);
-                }
-                $keyList[$key][] = $k;
+                $keyList[$this->normalize1g1r($k)][] = $k;
             }
             foreach ($keyList as $keys) {
                 if (count($keys) > 1) {
