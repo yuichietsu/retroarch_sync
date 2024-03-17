@@ -632,7 +632,7 @@ class AdbSyncRetroArch extends AdbSync
         return $rank;
     }
 
-    private function mergeVariants(array $list, array $options): array
+    private function filterVariants(array $list, array $options): array
     {
         if ($cond = ($options['1g1r'] ?? false)) {
             $newList = [];
@@ -707,8 +707,7 @@ class AdbSyncRetroArch extends AdbSync
     private function filterSrcList(array $srcList, array $options): array
     {
         $srcList = $this->filterExclude($srcList, $options);
-        $srcList = $this->mergeVariants($srcList, $options);
-        exit();
+        $srcList = $this->filterVariants($srcList, $options);
 
         if ($options['mode'] === 'full') {
             return $srcList;
