@@ -61,7 +61,7 @@ try {
             'sms'                => 'full',
             'snes'               => 'full:index,1g1r,rename(snes/snes)',
             'tosec_adf'          => 'full:rename(amiga/adf)',
-            'tosec_amigacd'      => 'rand:4g,rename(amiga/cd)',
+            'tosec_amigacd'      => 'rand:4g,rename(amigacd)',
             'tosec_psp'          => 'rand:8g,cso,rename(psp/tosec)',
             'tosec_snes'         => 'full:1g1r,rename(snes/tosec)',
             'tosec_spectrum_scl' => 'full:1g1r,index,rename(spectrum/scl)',
