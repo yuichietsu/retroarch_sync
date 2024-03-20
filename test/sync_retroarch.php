@@ -43,7 +43,7 @@ try {
             'libretro_snes'      => 'full:rename(snes/libretro)',
             'lnx'                => 'full:rename(lynx/lnx)',
             'lyx'                => 'full:excl(BIOS),rename(lynx/lyx)',
-            'mame'               => 'rand:4g',
+            'mame'               => 'rand:4g,lock',
             'megaduck'           => 'full',
             'md'                 => 'full:index,1g1r',
             'msx'                => 'full:excl(BIOS),1g1r',
