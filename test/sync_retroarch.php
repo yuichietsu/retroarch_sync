@@ -6,7 +6,7 @@ ob_implicit_flush();
 
 try {
     $sync = new \Menrui\AdbSyncRetroArch(
-        '192.168.11.51:5555',
+        '192.168.11.15:5555',
     );
     $sync->logger = fn ($message) => print("$message\n");
     $sync->statesPaths = [
@@ -53,6 +53,7 @@ try {
             'nes'                => 'full:index,excl(BIOS),1g1r',
             'ngc'                => 'full:1g1r',
             'ngp'                => 'full:1g1r',
+            'pc88'               => 'rand:1g',
             'pc98'               => 'rand:1g',
             'pce'                => 'full:excl(BIOS),1g1r',
             'plus4'              => 'full:excl(BIOS)',
