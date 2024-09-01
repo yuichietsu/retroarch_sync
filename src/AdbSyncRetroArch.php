@@ -77,7 +77,7 @@ class AdbSyncRetroArch extends AdbSync
         parent::__construct($remote);
     }
 
-    private function rmLocal(string $path): void
+    protected function rmLocal(string $path): void
     {
         if (str_starts_with($path, $this->tmpPath)) {
             file_exists($path) && exec(sprintf('%s -rf %s', $this->commands['rm'], escapeshellarg($path)));
@@ -240,7 +240,7 @@ class AdbSyncRetroArch extends AdbSync
         }
     }
 
-    private function makeTmpDir(): string
+    protected function makeTmpDir(): string
     {
         do {
             $rand = md5(mt_rand());
@@ -251,7 +251,7 @@ class AdbSyncRetroArch extends AdbSync
         return $dir;
     }
 
-    private function extractArchive(string $file, string $to = null): array
+    protected function extractArchive(string $file, string $to = null): array
     {
         $tmp     = $this->makeTmpDir();
         $arcInfo = $this->getArchiveInfo($file);
@@ -423,12 +423,14 @@ class AdbSyncRetroArch extends AdbSync
         return false;
     }
 
-    private function syncCore(
+    protected function syncCore(
         string $topDir,
         array $srcList,
         array $dstList,
         array $options
     ): void {
+        $delete = $options['delete'] ?? false;
+
         $cso = $options['cso'] ?? false;
         $chd = $options['chd'] ?? false;
         $zip = $options['zip'] ?? false;
@@ -475,10 +477,14 @@ class AdbSyncRetroArch extends AdbSync
             }
             unset($dstList[$dKey]);
         }
-        foreach (array_keys($dstList) as $key) {
-            $this->log("[DEL] $key");
-            $this->rmRemote($this->dstPath . "/$topDir/$key");
-            $c['d']++;
+        if ($delete) {
+            $c['d'] += $delete($dstList);
+        } else {
+            foreach (array_keys($dstList) as $key) {
+                $this->log("[DEL] $key");
+                $this->rmRemote($this->dstPath . "/$topDir/$key");
+                $c['d']++;
+            }
         }
         $this->log(sprintf('NEW:%d, UP:%d, SAME:%d, DEL:%s', $c['n'], $c['u'], $c['s'], $c['d']));
     }
