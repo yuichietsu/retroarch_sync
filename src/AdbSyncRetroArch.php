@@ -42,6 +42,7 @@ class AdbSyncRetroArch extends AdbSync
             'sizeParser' => '/(?<size>\\d+)\\s+(?<num>\\d+)\\s+files?/',
         ],
         '7z'  => [
+            'c' => '7z a -mx=9 %TO% %FROM%',
             'x' => '7z e',
             'l' => '7z l',
             'sizeParser' => '/(?<size>\\d+)\\s+\\d+\\s+(?<num>\\d+)\\s+files?/',
@@ -179,7 +180,7 @@ class AdbSyncRetroArch extends AdbSync
         }
     }
 
-    private function syncDir(string $dir, array $srcList, array $options, int $mode): void
+    protected function syncDir(string $dir, array $srcList, array $options, int $mode): void
     {
         $this->mkdirRemote($this->dstPath . "/$dir");
         $dstList = $this->listRemote($this->dstPath . "/$dir", $mode);
@@ -225,7 +226,7 @@ class AdbSyncRetroArch extends AdbSync
         }
     }
 
-    private function syncFiles(string $topDir, array $sData): void
+    protected function syncFiles(string $topDir, array $sData): void
     {
         foreach ($sData as $data) {
             [$src, $file] = $data;
@@ -304,7 +305,7 @@ class AdbSyncRetroArch extends AdbSync
         $this->syncArcToArc($topDir, $sData, $dirName, 'chd');
     }
 
-    private function syncArcToArc(string $topDir, array $sData, string $dirName, string $to): void
+    protected function syncArcToArc(string $topDir, array $sData, string $dirName, string $to): void
     {
         [$fileInfo]    = $sData;
         [$src]         = $fileInfo;
@@ -392,7 +393,7 @@ class AdbSyncRetroArch extends AdbSync
         return $map;
     }
 
-    private function compareDir(array $sData, array $dData): bool
+    protected function compareDir(array $sData, array $dData): bool
     {
         $same  = count($sData) === count($dData);
         if ($same) {
@@ -804,7 +805,7 @@ class AdbSyncRetroArch extends AdbSync
         return null !== $this->getSupportedArchiveExtension($file);
     }
 
-    private function getSupportedArchiveExtension(string $file): ?string
+    protected function getSupportedArchiveExtension(string $file): ?string
     {
         $extensions = $this->getSupportedArchiveRE();
         if (preg_match("/\\.($extensions)$/i", $file, $m)) {
