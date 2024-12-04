@@ -42,8 +42,7 @@ RetroArchのためにPCからFire TV Stickにゲームを転送するための�
 使い方の一例を記載します。
 
 ```php
-$sync = new \Menrui\AdbSync(
-    '/usr/bin/adb',         // adbのパス
+$sync = new \Menrui\AdbSyncRetroArch(
     '192.168.11.44:5555',   // Fire TV Stick
 );
 
@@ -62,7 +61,7 @@ $sync->sync(
 
 ## 設定
 
-### `\Menrui\AdbSync`のメンバプロパティ
+### `\Menrui\AdbSyncRetroArch`のメンバプロパティ
 
 #### srcPath : string
 転送元のPCのディレクトリ(必須)
