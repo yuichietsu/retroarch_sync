@@ -642,12 +642,6 @@ class AdbSyncRetroArch extends AdbSync
             }
             $regionScore--;
         }
-        if (preg_match('/\\(unl\\)/i', $name)) {
-            $rank -= 10 ** 6;
-        }
-        if (preg_match('/\\(pirate\\)/i', $name)) {
-            $rank -= 2 * 10 ** 6;
-        }
         if (preg_match('/\\(beta( \\d+)?\\)/i', $name)) {
             $rank -= 10 ** 7;
         }
