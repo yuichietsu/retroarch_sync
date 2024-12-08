@@ -612,9 +612,6 @@ class AdbSyncRetroArch extends AdbSync
         $name = preg_replace("/\\s*\\(en\\)\\s*/i", '', $name);
         $name = preg_replace("/\\s*\\((19|20)\\d{2}-\\d{2}-\\d{2}\\)\\s*/i", '', $name);
         $name = preg_replace("/\\s*\\(v\\d+(\\.\\d+)?\\)\\s*/i", '', $name);
-        if (preg_match('/\\((pirate|unl)\\)/i', $name)) {
-            $name = preg_replace("/\\s*\\(.+\\)\\s*/i", '', $name);
-        }
         return $name;
     }
 
