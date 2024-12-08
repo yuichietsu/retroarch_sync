@@ -605,7 +605,7 @@ class AdbSyncRetroArch extends AdbSync
         }
         $name = preg_replace('/\\s*\\[.*?\\]\\s*/', '', $name);
         $name = preg_replace("/\\s*\\(($regions)([,\\-][^\\)]+)?\\)\\s*/i", '', $name);
-        $name = preg_replace("/\\s*\\(rev \\d+\\)\\s*/i", '', $name);
+        $name = preg_replace("/\\s*\\(rev (\\d+|[a-z])\\)\\s*/i", '', $name);
         $name = preg_replace("/\\s*\\(alt( \\d+)?\\)\\s*/i", '', $name);
         $name = preg_replace("/\\s*\\(beta( \\d+)?\\)\\s*/i", '', $name);
         $name = preg_replace("/\\s*\\((demo|proto|sample|[^\\(\\)]*virtual console)\\)\\s*/i", '', $name);
