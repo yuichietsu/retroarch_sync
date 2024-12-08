@@ -576,25 +576,27 @@ class AdbSyncRetroArch extends AdbSync
 
     private function filterExclude(array $list, array $options): array
     {
+        if ($options['official'] ?? false) {
+            $list = array_filter(
+                $list,
+                fn ($k) => !preg_match('/\\(unl|pirate\\)/i', $k),
+                ARRAY_FILTER_USE_KEY
+            );
+        }
+
         if ($excl = ($options['excl'] ?? false)) {
-            $newList = [];
-            foreach ($list as $k => $v) {
-                $excluded = false;
+            $list = array_filter($list, function ($k) use ($excl) {
                 foreach ($excl as $ex) {
                     if (str_contains($k, $ex)) {
                         $this->debug && $this->log("[EXCLUDE] $k");
-                        $excluded = true;
-                        break;
+                        return false;
                     }
                 }
-                if (!$excluded) {
-                    $newList[$k] = $v;
-                }
-            }
-            return $newList;
-        } else {
-            return $list;
+                return true;
+            }, ARRAY_FILTER_USE_KEY);
         }
+
+        return $list;
     }
 
     private function normalize1g1r(string $name): string
