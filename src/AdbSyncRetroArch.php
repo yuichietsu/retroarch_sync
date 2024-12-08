@@ -605,7 +605,7 @@ class AdbSyncRetroArch extends AdbSync
         }
         $name = preg_replace('/\\s*\\[.*?\\]\\s*/', '', $name);
         $name = preg_replace("/\\s*\\(($regions)([,\\-][^\\)]+)?\\)\\s*/i", '', $name);
-        $name = preg_replace("/\\s*\\(rev (\\d+|[a-z])\\)\\s*/i", '', $name);
+        $name = preg_replace("/\\s*\\(rev (\\d{1,2}(\\.\\d+)?|[a-z])\\)\\s*/i", '', $name);
         $name = preg_replace("/\\s*\\(alt( \\d+)?\\)\\s*/i", '', $name);
         $name = preg_replace("/\\s*\\(beta( \\d+)?\\)\\s*/i", '', $name);
         $name = preg_replace("/\\s*\\((demo|proto|sample|[^\\(\\)]*virtual console)\\)\\s*/i", '', $name);
@@ -622,8 +622,10 @@ class AdbSyncRetroArch extends AdbSync
         foreach ($m[1] as $tag) {
             $rank += self::TAG_SCORE[$tag];
         }
-        if (preg_match('/\\(rev (\\d+)\\)/i', $name, $mr)) {
-            $rank += $mr[1] * 10 ** 3;
+        if (preg_match('/\\(rev (\\d{1,2}(\\.\\d+)?|[a-z])\\)/i', $name, $mr)) {
+            $rev   = strtoupper($mr[1]);
+            $rev   = strlen($rev) === 1 ? ord($rev) - ord('0') : $rev;
+            $rank += $rev * 10 ** 3;
         }
         if (preg_match('/\\([^\\(\\)]*virtual console\\)/i', $name)) {
             $rank -= 10 ** 4;
