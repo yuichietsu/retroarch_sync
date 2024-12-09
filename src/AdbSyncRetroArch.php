@@ -26,12 +26,17 @@ class AdbSyncRetroArch extends AdbSync
         'france',
         'germany',
         'brazil',
+        'china',
+        'korea',
         'japan',
         'world',
         'us',
         'eu',
         'jp',
         'kr',
+        'ko',
+        'zh',
+        'cn',
     ];
 
     public array $archivers = [
@@ -605,6 +610,7 @@ class AdbSyncRetroArch extends AdbSync
         if ($regions === null) {
             $regions = implode('|', self::REGIONS);
         }
+        $name = preg_replace('/\\.(zip|7z)$/i', '', $name);
         $name = preg_replace('/\\s*\\[.*?\\]\\s*/', '', $name);
         $name = preg_replace("/\\s*\\(($regions)([,\\-][^\\)]+)?\\)\\s*/i", '', $name);
         $name = preg_replace("/\\s*\\(rev (\\d{1,2}(\\.\\d+)?|[a-z])\\)\\s*/i", '', $name);
