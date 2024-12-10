@@ -205,7 +205,7 @@ class AdbSyncRetroArch extends AdbSync
             file_put_contents("$tmp/$m3uFile", $content);
             if (array_key_exists($m3uFile, $dstList)) {
                 $dData = $dstList[$m3uFile];
-                $dHash = $dData[0][self::IDX_HASH];
+                $dHash = $this->getFileHash($dData[0]);
                 $sHash = md5($content);
                 if ($sHash === $dHash) {
                     $this->verbose && $this->log("[M3U:SAME] $m3uFile");
