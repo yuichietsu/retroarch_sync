@@ -190,10 +190,9 @@ class AdbSyncRetroArch extends AdbSync
         $this->mkdirRemote($this->dstPath . "/$dir");
         $dstList = $this->listRemote($this->dstPath . "/$dir", $mode);
         $this->syncCore($dir, $srcList, $dstList, $options);
-        $this->makeM3U($dir, $options);
     }
 
-    private function sendM3U(string $topDir, array $m3u): void
+    private function sendM3U(string $topDir, array $m3u, array &$dstList, array &$c): void
     {
         if (count($m3u) === 0) {
             return;
@@ -202,15 +201,34 @@ class AdbSyncRetroArch extends AdbSync
         foreach ($m3u as $key => $files) {
             sort($files);
             $m3uFile = "$key.m3u";
-            file_put_contents("$tmp/$m3uFile", implode("\n", $files));
-            $dst = $this->dstPath . "/$topDir/$m3uFile";
-            $this->push("$tmp/$m3uFile", $dst);
-            $this->log("[PUSH] $m3uFile");
+            $content = implode("\n", $files);
+            file_put_contents("$tmp/$m3uFile", $content);
+            if (array_key_exists($m3uFile, $dstList)) {
+                $dData = $dstList[$m3uFile];
+                $dHash = $dData[0][self::IDX_HASH];
+                $sHash = md5($content);
+                if ($sHash === $dHash) {
+                    $this->verbose && $this->log("[SAME] $m3uFile");
+                    $c['s']++;
+                } else {
+                    $dst = $this->dstPath . "/$topDir/$m3uFile";
+                    $this->rmRemote($dst);
+                    $this->push("$tmp/$m3uFile", $dst);
+                    $this->log("[UP] $m3uFile");
+                    $c['u']++;
+                }
+                unset($dstList[$m3uFile]);
+            } else {
+                $dst = $this->dstPath . "/$topDir/$m3uFile";
+                $this->push("$tmp/$m3uFile", $dst);
+                $this->log("[NEW] $m3uFile");
+                $c['n']++;
+            }
         }
         $this->rmLocal($tmp);
     }
 
-    private function makeM3U(string $topDir, array $options): void
+    private function makeM3U(string $topDir, array &$dstList, array &$c, array $options): void
     {
         if ($options['disks'] ?? false) {
             $m3u  = [];
@@ -227,7 +245,7 @@ class AdbSyncRetroArch extends AdbSync
                     }
                 }
             }
-            $this->sendM3U($topDir, $m3u);
+            $this->sendM3U($topDir, $m3u, $dstList, $c);
         }
     }
 
@@ -482,6 +500,9 @@ class AdbSyncRetroArch extends AdbSync
             }
             unset($dstList[$dKey]);
         }
+
+        $this->makeM3U($topDir, $dstList, $c, $options);
+
         if ($delete) {
             $c['d'] += $delete($dstList);
         } else {
@@ -564,7 +585,7 @@ class AdbSyncRetroArch extends AdbSync
     {
         $file = $this->isSingleFile($data);
         if (!$file) {
-            return false;
+            return null;
         }
         [$path] = $file;
         $escExt = implode('|', array_map(
