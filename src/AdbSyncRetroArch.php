@@ -192,7 +192,7 @@ class AdbSyncRetroArch extends AdbSync
         $this->syncCore($dir, $srcList, $dstList, $options);
     }
 
-    private function sendM3U(string $topDir, array $m3u, array &$dstList, array &$c): void
+    private function sendM3U(string $topDir, array $m3u, array &$dstList): void
     {
         if (count($m3u) === 0) {
             return;
@@ -208,27 +208,24 @@ class AdbSyncRetroArch extends AdbSync
                 $dHash = $dData[0][self::IDX_HASH];
                 $sHash = md5($content);
                 if ($sHash === $dHash) {
-                    $this->verbose && $this->log("[SAME] $m3uFile");
-                    $c['s']++;
+                    $this->verbose && $this->log("[M3U:SAME] $m3uFile");
                 } else {
                     $dst = $this->dstPath . "/$topDir/$m3uFile";
                     $this->rmRemote($dst);
                     $this->push("$tmp/$m3uFile", $dst);
-                    $this->log("[UP] $m3uFile");
-                    $c['u']++;
+                    $this->log("[M3U:UP] $m3uFile");
                 }
                 unset($dstList[$m3uFile]);
             } else {
                 $dst = $this->dstPath . "/$topDir/$m3uFile";
                 $this->push("$tmp/$m3uFile", $dst);
-                $this->log("[NEW] $m3uFile");
-                $c['n']++;
+                $this->log("[M3U:NEW] $m3uFile");
             }
         }
         $this->rmLocal($tmp);
     }
 
-    private function makeM3U(string $topDir, array &$dstList, array &$c, array $options): void
+    private function makeM3U(string $topDir, array &$dstList, array $options): void
     {
         if ($options['disks'] ?? false) {
             $m3u  = [];
@@ -245,7 +242,7 @@ class AdbSyncRetroArch extends AdbSync
                     }
                 }
             }
-            $this->sendM3U($topDir, $m3u, $dstList, $c);
+            $this->sendM3U($topDir, $m3u, $dstList);
         }
     }
 
@@ -501,7 +498,7 @@ class AdbSyncRetroArch extends AdbSync
             unset($dstList[$dKey]);
         }
 
-        $this->makeM3U($topDir, $dstList, $c, $options);
+        $this->makeM3U($topDir, $dstList, $options);
 
         if ($delete) {
             $c['d'] += $delete($dstList);
