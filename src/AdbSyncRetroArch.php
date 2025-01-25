@@ -147,9 +147,13 @@ class AdbSyncRetroArch extends AdbSync
             if (array_key_exists($dir, $targets)) {
                 $this->log("[SCAN] $dir");
                 $settings = $targets[$dir];
-                $options  = $this->parseOptions($settings);
+                if (is_callable($settings)) {
+                    $options = call_user_func($settings, $this->parseOptions(...));
+                } else {
+                    $options = $this->parseOptions($settings);
+                }
                 if (!($options['mode'] ?? false)) {
-                    $this->log("[SKIP] invalid settings : $settings");
+                    $this->log('[SKIP] invalid settings');
                     continue;
                 }
                 $dstDir  = $options['rename'] ?? $dir;
