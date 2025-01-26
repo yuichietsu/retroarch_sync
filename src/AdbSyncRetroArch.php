@@ -724,7 +724,11 @@ class AdbSyncRetroArch extends AdbSync
         if ($locks || $incl) {
             foreach ($list as $k => $v) {
                 foreach ($incl as $in) {
-                    if (str_contains($k, $in)) {
+                    if (str_starts_with($in, '^') && str_starts_with($k, substr($in, 1))) {
+                        $this->debug && $this->log("[INCLUDE^] $k");
+                        $newList[$k] = $v;
+                        break;
+                    } elseif (str_contains($k, $in)) {
                         $this->debug && $this->log("[INCLUDE] $k");
                         $newList[$k] = $v;
                         break;
