@@ -608,7 +608,10 @@ class AdbSyncRetroArch extends AdbSync
         if ($excl = ($options['excl'] ?? false)) {
             $list = array_filter($list, function ($k) use ($excl) {
                 foreach ($excl as $ex) {
-                    if (str_contains($k, $ex)) {
+                    if (str_starts_with($ex, '^') && str_starts_with($k, substr($ex, 1))) {
+                        $this->debug && $this->log("[EXCLUDE^] $k");
+                        return false;
+                    } elseif (str_contains($k, $ex)) {
                         $this->debug && $this->log("[EXCLUDE] $k");
                         return false;
                     }
