@@ -114,6 +114,8 @@ class AdbSyncRetroArch extends AdbSync
                     };
                 } elseif (preg_match('/^lock(\\(.*\\))?$/', $i, $im)) {
                     $options['lock'] = strtolower(trim($im[1] ?? '*', '()'));
+                } elseif (preg_match('/^list(\\(.*\\))$/', $i, $im)) {
+                    $options['list'] = explode('|', trim($im[1], '()'));
                 } elseif (preg_match('/^incl(\\(.*\\))$/', $i, $im)) {
                     $options['incl'] = explode('|', trim($im[1], '()'));
                 } elseif (preg_match('/^excl(\\(.*\\))$/', $i, $im)) {
@@ -595,8 +597,30 @@ class AdbSyncRetroArch extends AdbSync
         return count($data) === 1 ? $data[0] : null;
     }
 
+    private function filterName(string $filter, string $name): bool
+    {
+        if (str_starts_with($filter, '^') && str_starts_with($name, substr($filter, 1))) {
+            return true;
+        } elseif (str_contains($name, $filter)) {
+            return true;
+        }
+        return false;
+    }
+
     private function filterExclude(array $list, array $options): array
     {
+        if ($filter = ($options['list'] ?? false)) {
+            $list = array_filter($list, function ($k) use ($filter) {
+                foreach ($filter as $fl) {
+                    if ($this->filterName($fl, $k)) {
+                        $this->debug && $this->log("[LIST] $k");
+                        return true;
+                    }
+                }
+                return false;
+            }, ARRAY_FILTER_USE_KEY);
+        }
+
         if ($options['official'] ?? false) {
             $list = array_filter(
                 $list,
@@ -608,10 +632,7 @@ class AdbSyncRetroArch extends AdbSync
         if ($excl = ($options['excl'] ?? false)) {
             $list = array_filter($list, function ($k) use ($excl) {
                 foreach ($excl as $ex) {
-                    if (str_starts_with($ex, '^') && str_starts_with($k, substr($ex, 1))) {
-                        $this->debug && $this->log("[EXCLUDE^] $k");
-                        return false;
-                    } elseif (str_contains($k, $ex)) {
+                    if ($this->filterName($ex, $k)) {
                         $this->debug && $this->log("[EXCLUDE] $k");
                         return false;
                     }
@@ -724,11 +745,7 @@ class AdbSyncRetroArch extends AdbSync
         if ($locks || $incl) {
             foreach ($list as $k => $v) {
                 foreach ($incl as $in) {
-                    if (str_starts_with($in, '^') && str_starts_with($k, substr($in, 1))) {
-                        $this->debug && $this->log("[INCLUDE^] $k");
-                        $newList[$k] = $v;
-                        break;
-                    } elseif (str_contains($k, $in)) {
+                    if ($this->filterName($in, $k)) {
                         $this->debug && $this->log("[INCLUDE] $k");
                         $newList[$k] = $v;
                         break;
