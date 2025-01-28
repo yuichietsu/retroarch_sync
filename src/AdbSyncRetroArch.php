@@ -763,6 +763,7 @@ class AdbSyncRetroArch extends AdbSync
 
     private function filterSrcList(array $srcList, array $options): array
     {
+        $orgList = $srcList;
         $srcList = $this->filterExclude($srcList, $options);
         $srcList = $this->filterVariants($srcList, $options);
 
@@ -780,6 +781,15 @@ class AdbSyncRetroArch extends AdbSync
                     $newList[$key] = $leftList[$key];
                 }
             }
+
+            $deps = $this->getDeps($newList, $orgList, $options);
+            if ($depsCnt = count($deps)) {
+                foreach ($deps as $key) {
+                    $newList[$key] = $orgList[$key];
+                }
+                $this->log(sprintf('[DEPS] + %s files', number_format($depsCnt)));
+            }
+
             $this->log(sprintf('[RAND] %s files', number_format(count($newList))));
             return $newList;
         }
@@ -790,12 +800,12 @@ class AdbSyncRetroArch extends AdbSync
             $newList = [];
             $disks   = ($options['disks'] ?? false) ? [] : null;
 
-            $filter = function ($keys, $th) use ($srcList, &$newList, &$sum, $extract, &$disks) {
+            $filter = function ($keys, $th) use ($orgList, &$newList, &$sum, $extract, &$disks) {
                 foreach ($keys as $key) {
                     if (array_key_exists($key, $newList)) {
                         continue;
                     }
-                    $data = $srcList[$key];
+                    $data = $orgList[$key];
                     if ($extract && $this->isExtractable($data)) {
                         [$fileInfo] = $data;
                         [$file]     = $fileInfo;
@@ -831,11 +841,42 @@ class AdbSyncRetroArch extends AdbSync
                 $filter($tmpKeys, $th);
             }
 
+            $deps = $this->getDeps($newList, $orgList, $options);
+            if (0 < count($deps)) {
+                $preSum = $sum;
+                $filter($deps, PHP_INT_MAX);
+                $this->log(sprintf('[DEPS] + %s bytes', number_format($sum - $preSum)));
+            }
+
             $this->log(sprintf('[RAND] %s bytes', number_format($sum)));
             return $newList;
         }
 
         throw new Exception('rand mode must have number or size option');
+    }
+
+    private function getDeps(array $list, array $orgList, array $options): array
+    {
+        $deps = [];
+        if ($depMap = ($options['deps'] ?? false)) {
+            foreach (array_keys($list) as $key) {
+                $k = $this->trimArchiveExtension($key);
+                if (array_key_exists($k, $depMap)) {
+                    foreach ($depMap[$k] as $romName) {
+                        $msg = "[DEPS] $key -> ";
+                        foreach (array_keys($orgList) as $fileName) {
+                            if ($this->trimArchiveExtension($fileName) === $romName) {
+                                $deps[]  = $fileName;
+                                $msg    .= $fileName;
+                                break;
+                            }
+                        }
+                        $this->log($msg);
+                    }
+                }
+            }
+        }
+        return array_unique($deps);
     }
 
     private function isExtractable(array $filesInGame): bool
