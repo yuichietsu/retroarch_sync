@@ -744,16 +744,17 @@ class AdbSyncRetroArch extends AdbSync
         $incl    = $options['incl'] ?? [];
         if ($locks || $incl) {
             foreach ($list as $k => $v) {
-                foreach ($incl as $in) {
-                    if ($this->filterName($in, $k)) {
-                        $this->debug && $this->log("[INCLUDE] $k");
-                        $newList[$k] = $v;
-                        break;
-                    }
-                }
                 if (array_key_exists($this->trimArchiveExtension($k), $locks)) {
                     $newList[$k] = $v;
                     $this->log("[LOCKED] $k");
+                } else {
+                    foreach ($incl as $in) {
+                        if ($this->filterName($in, $k)) {
+                            $this->debug && $this->log("[INCLUDE] $k");
+                            $newList[$k] = $v;
+                            break;
+                        }
+                    }
                 }
             }
         }
