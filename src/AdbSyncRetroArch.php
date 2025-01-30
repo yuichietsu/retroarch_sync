@@ -95,7 +95,12 @@ class AdbSyncRetroArch extends AdbSync
         }
     }
 
-    private function parseOptions(string $optionString): array
+    public function listGamesRemote(string $dir): array
+    {
+        return $this->listChildrenRemote("{$this->dstPath}/$dir");
+    }
+
+    public function parseOptions(string $optionString): array
     {
         $options = [];
         if (preg_match('/^(full|rand)(:.*)?$/', $optionString, $m)) {
@@ -150,7 +155,7 @@ class AdbSyncRetroArch extends AdbSync
                 $this->log("[SCAN] $dir");
                 $settings = $targets[$dir];
                 if (is_callable($settings)) {
-                    $options = call_user_func($settings, $this->parseOptions(...));
+                    $options = call_user_func($settings, $this);
                 } else {
                     $options = $this->parseOptions($settings);
                 }
