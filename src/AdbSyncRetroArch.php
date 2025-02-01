@@ -257,6 +257,35 @@ class AdbSyncRetroArch extends AdbSync
         }
     }
 
+    private function makeDummyClones(string $topDir, array $srcList, array &$dstList, array $options): void
+    {
+        if ($cloneMap = ($options['clones'] ?? false)) {
+            $tmp = $this->makeTmpDir();
+            touch("$tmp/empty");
+            foreach (array_keys($srcList) as $file) {
+                if ($ext = $this->getSupportedArchiveExtension($file)) {
+                    $game = $this->trimArchiveExtension($file);
+                    if ($clones = ($cloneMap[$game] ?? false)) {
+                        foreach ($clones as $clone) {
+                            $cloneFile = "$clone.$ext";
+                            if (array_key_exists($cloneFile, $srcList)) {
+                                $this->log("[CLONE:SKIP] $cloneFile -> $file");
+                            } else {
+                                $dst = $this->dstPath . "/$topDir/$cloneFile";
+                                $this->rmRemote($dst);
+                                $this->push("$tmp/empty", $dst);
+                                $this->log("[CLONE] $cloneFile -> $file");
+                                unset($dstList[$cloneFile]);
+                            }
+                        }
+                    }
+                }
+            }
+            $this->rmLocal($tmp);
+        }
+    }
+
+
     protected function syncFiles(string $topDir, array $sData): void
     {
         foreach ($sData as $data) {
@@ -508,6 +537,7 @@ class AdbSyncRetroArch extends AdbSync
         }
 
         $this->makeM3U($topDir, $dstList, $options);
+        $this->makeDummyClones($topDir, $srcList, $dstList, $options);
 
         foreach (array_keys($dstList) as $key) {
             $this->log("[DEL] $key");
