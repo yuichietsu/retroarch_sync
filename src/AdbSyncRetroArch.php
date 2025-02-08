@@ -132,6 +132,8 @@ class AdbSyncRetroArch extends AdbSync
                     );
                 } elseif (preg_match('/^rename(\\(.*\\))$/', $i, $im)) {
                     $options['rename'] = trim($im[1], '()/');
+                } elseif (preg_match('/^cmd(\\(.*\\))?$/', $i, $im)) {
+                    $options['cmd'] = ['exe' => strtolower(trim($im[1] ?? '*', '()'))];
                 } else {
                     $options[$i] = true;
                 }
@@ -416,13 +418,16 @@ class AdbSyncRetroArch extends AdbSync
         $this->rmLocal($dir);
     }
 
-    private function syncArchiveFiles(string $topDir, array $sData, string $dirName): void
+    private function syncArchiveFiles(string $topDir, array $sData, string $dirName, array $options): void
     {
         [$sFileInfo]         = $sData;
         $sPath = $sFileInfo[self::IDX_PATH];
         $sHash = $this->getFileHash($sFileInfo);
 
         [$dir, $files] = $this->extractArchive($sPath);
+        if ($cmdFile = $this->makeCmdFile($dir, $dirName, $files, $options)) {
+            $files[] = $cmdFile;
+        }
         $hashFile = "hash_$sHash";
         touch("$dir/$hashFile");
         $files[] = $hashFile;
@@ -436,6 +441,17 @@ class AdbSyncRetroArch extends AdbSync
             $this->log("[PUSH] $file");
         }
         $this->rmLocal($dir);
+    }
+
+    private function makeCmdFile($dir, $dirName, $files, $options): ?string
+    {
+        $cmdFile = null;
+        if ($cmd = ($options['cmd'] ?? false)) {
+            $disks   = $cmd['disks'][$dirName] ?? $files;
+            $cmdFile = ($cmd['title'][$dirName] ?? $dirName) . '.cmd';
+            file_put_contents("$dir/$cmdFile", implode(' ', [$cmd['exe'], ...$disks]));
+        }
+        return $cmdFile;
     }
 
     private function getFileHash(array $fileInfo): string
@@ -525,12 +541,12 @@ class AdbSyncRetroArch extends AdbSync
                 } else {
                     $this->log("[UP] $sKey => $dKey");
                     $this->rmRemote($this->dstPath . "/$topDir/$dKey");
-                    $sync($topDir, $sData, $dKey);
+                    $sync($topDir, $sData, $dKey, $options);
                     $c['u']++;
                 }
             } else {
                 $this->log("[NEW] $sKey => $dKey");
-                $sync($topDir, $sData, $dKey);
+                $sync($topDir, $sData, $dKey, $options);
                 $c['n']++;
             }
             unset($dstList[$dKey]);
