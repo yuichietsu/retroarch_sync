@@ -134,6 +134,8 @@ class AdbSyncRetroArch extends AdbSync
                     $options['rename'] = trim($im[1], '()/');
                 } elseif (preg_match('/^cmd(\\(.*\\))?$/', $i, $im)) {
                     $options['cmd'] = ['exe' => strtolower(trim($im[1] ?? '*', '()'))];
+                } elseif (preg_match('/^m3u$/', $i, $im)) {
+                    $options['m3u'] = ['title' => [], 'disks' => []];
                 } else {
                     $options[$i] = true;
                 }
@@ -158,6 +160,8 @@ class AdbSyncRetroArch extends AdbSync
                 $settings = $targets[$dir];
                 if (is_callable($settings)) {
                     $options = call_user_func($settings, $this);
+                } elseif (is_array($settings)) {
+                    $options = $settings;
                 } else {
                     $options = $this->parseOptions($settings);
                 }
@@ -425,8 +429,8 @@ class AdbSyncRetroArch extends AdbSync
         $sHash = $this->getFileHash($sFileInfo);
 
         [$dir, $files] = $this->extractArchive($sPath);
-        if ($cmdFile = $this->makeCmdFile($dir, $dirName, $files, $options)) {
-            $files[] = $cmdFile;
+        if ($listFile = $this->makeListFile($dir, $dirName, $files, $options)) {
+            $files[] = $listFile;
         }
         $hashFile = "hash_$sHash";
         touch("$dir/$hashFile");
@@ -443,15 +447,20 @@ class AdbSyncRetroArch extends AdbSync
         $this->rmLocal($dir);
     }
 
-    private function makeCmdFile($dir, $dirName, $files, $options): ?string
+    private function makeListFile($dir, $dirName, $files, $options): ?string
     {
-        $cmdFile = null;
-        if ($cmd = ($options['cmd'] ?? false)) {
-            $disks   = $cmd['disks'][$dirName] ?? $files;
-            $cmdFile = ($cmd['title'][$dirName] ?? $dirName) . '.cmd';
-            file_put_contents("$dir/$cmdFile", implode(' ', [$cmd['exe'], ...$disks]));
+        $listFile = null;
+        if ($opt = ($options['cmd'] ?? false)) {
+            $disks   = $opt['disks'][$dirName] ?? $files;
+            $listFile = ($opt['title'][$dirName] ?? $dirName) . '.cmd';
+            file_put_contents("$dir/$listFile", implode(' ', [$opt['exe'], ...$disks]));
         }
-        return $cmdFile;
+        if ($opt = ($options['m3u'] ?? false)) {
+            $disks   = $opt['disks'][$dirName] ?? $files;
+            $listFile = ($opt['title'][$dirName] ?? $dirName) . '.m3u';
+            file_put_contents("$dir/$listFile", implode("\n", $disks));
+        }
+        return $listFile;
     }
 
     private function getFileHash(array $fileInfo): string
