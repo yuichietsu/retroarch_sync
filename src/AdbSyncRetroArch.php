@@ -180,7 +180,11 @@ class AdbSyncRetroArch extends AdbSync
                 if ($options['index'] ?? false) {
                     $az = [];
                     foreach ($srcList as $k => $v) {
-                        $i = preg_match('/^([a-zA-Z])/', $k, $m) ? strtoupper($m[1]) : '_';
+                        $nk = strtoupper(mb_convert_kana($k, 'aHc'));
+                        $i  = preg_match('/^([0-9A-Z\\p{Hiragana}])/u', $nk, $m) ? $m[1] : '_';
+                        if (preg_match('/^[0-9]$/', $i)) {
+                            $i = '0-9';
+                        }
                         $az[$i][$k] = $v;
                     }
                     foreach ($az as $i => $srcList) {
