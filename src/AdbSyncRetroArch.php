@@ -44,12 +44,14 @@ class AdbSyncRetroArch extends AdbSync
             'c' => 'zip -9 %TO% %FROM%',
             'x' => 'unzip',
             'l' => 'unzip -l',
+            'n' => 'unzip -Z1',
             'sizeParser' => '/(?<size>\\d+)\\s+(?<num>\\d+)\\s+files?/',
         ],
         '7z'  => [
             'c' => '7z a -mx=9 %TO% %FROM%',
             'x' => '7z e',
             'l' => '7z l',
+            'n' => '7z l -ba',
             'sizeParser' => '/(?<size>\\d+)\\s+\\d+\\s+(?<num>\\d+)\\s+files?/',
         ],
         'cso' => [
@@ -132,10 +134,12 @@ class AdbSyncRetroArch extends AdbSync
                     );
                 } elseif (preg_match('/^rename(\\(.*\\))$/', $i, $im)) {
                     $options['rename'] = trim($im[1], '()/');
-                } elseif (preg_match('/^cmd(\\(.*\\))?$/', $i, $im)) {
-                    $options['cmd'] = ['exe' => strtolower(trim($im[1] ?? '*', '()'))];
+                } elseif (preg_match('/^cmd(\\(.*\\))$/', $i, $im)) {
+                    $options['cmd'] = ['exe' => strtolower(trim($im[1], '()'))];
                 } elseif (preg_match('/^m3u$/', $i, $im)) {
                     $options['m3u'] = ['title' => [], 'disks' => []];
+                } elseif (preg_match('/^1f1z(\\(.*\\))?$/', $i, $im)) {
+                    $options['1f1z'] = strtolower(trim($im[1] ?? 'zip', '()'));
                 } else {
                     $options[$i] = true;
                 }
@@ -356,6 +360,18 @@ class AdbSyncRetroArch extends AdbSync
         return $info['size'];
     }
 
+    private function getFileCountInArchive(string $file): int
+    {
+        $arcInfo = $this->getArchiveInfo($file);
+        $exe     = $arcInfo['n'];
+        $cmd     = sprintf('%s %s | wc -l', $exe, escapeshellarg($file));
+        $last    = exec($cmd, $lines, $ret);
+        if ($ret !== 0) {
+            throw new Exception(implode("\n", [$cmd, ...$lines]));
+        }
+        return (int)$last;
+    }
+
     private function sync7zToZip(string $topDir, array $sData, string $dirName): void
     {
         $this->syncArcToArc($topDir, $sData, $dirName, 'zip');
@@ -371,30 +387,20 @@ class AdbSyncRetroArch extends AdbSync
         $this->syncArcToArc($topDir, $sData, $dirName, 'chd');
     }
 
-    protected function syncArcToArc(string $topDir, array $sData, string $dirName, string $to): void
+    private function createArchive(string $to, string|array $from, string $dir): void
     {
-        [$fileInfo]    = $sData;
-        [$src]         = $fileInfo;
-        [$dir, $files] = $this->extractArchive($src, $to);
-        $hash          = $this->getFileHash($fileInfo);
-        $hashFile      = "hash_$hash";
-        touch("$dir/$hashFile");
-
-        $archiver = $this->archivers[$to];
+        $archiver = $this->getArchiveInfo($to);
         $exe = $archiver['c'];
-        if ($iFilter = $archiver['inputFilter'] ?? null) {
-            $newFiles = [];
-            foreach ($files as $file) {
-                if (preg_match($iFilter, $file)) {
-                    $newFiles[] = $file;
-                    break;
-                }
-            }
-            $files = $newFiles ?: $files;
+
+        if (is_string($from)) {
+            $from = escapeshellarg($from);
+        } else {
+            $from = implode(' ', array_map('escapeshellarg', $from));
         }
+
         $cmd = str_replace(
             ['%TO%', '%FROM%'],
-            [escapeshellarg($dirName) . ".$to", implode(' ', array_map('escapeshellarg', $files))],
+            [escapeshellarg($to), $from],
             sprintf("cd %s; %s", escapeshellarg($dir), $exe)
         );
         exec($cmd, $lines, $ret);
@@ -405,6 +411,30 @@ class AdbSyncRetroArch extends AdbSync
                 ...$lines,
             ]));
         }
+    }
+
+    protected function syncArcToArc(string $topDir, array $sData, string $dirName, string $to): void
+    {
+        [$fileInfo]    = $sData;
+        [$src]         = $fileInfo;
+        [$dir, $files] = $this->extractArchive($src, $to);
+        $hash          = $this->getFileHash($fileInfo);
+        $hashFile      = "hash_$hash";
+        touch("$dir/$hashFile");
+
+        $archiver = $this->archivers[$to];
+        if ($iFilter = $archiver['inputFilter'] ?? null) {
+            $newFiles = [];
+            foreach ($files as $file) {
+                if (preg_match($iFilter, $file)) {
+                    $newFiles[] = $file;
+                    break;
+                }
+            }
+            $files = $newFiles ?: $files;
+        }
+
+        $this->createArchive("$dirName.$to", $files, $dir);
 
         $files = [
             "$dirName.$to",
@@ -428,13 +458,35 @@ class AdbSyncRetroArch extends AdbSync
         $sPath = $sFileInfo[self::IDX_PATH];
         $sHash = $this->getFileHash($sFileInfo);
 
-        [$dir, $files] = $this->extractArchive($sPath);
-        if ($listFile = $this->makeListFile($dir, $dirName, $files, $options)) {
-            $files[] = $listFile;
+        $is1F1Z = false;
+        if ($toExt = ($options['1f1z'] ?? false)) {
+            $count = $this->getFileCountInArchive($sPath);
+            $fromExt = $this->getSupportedArchiveExtension($sPath);
+            if ($is1F1Z = $count === 1) {
+                $name  = $this->getNameFromList($dirName, $options);
+                $file  = "$name.$toExt";
+                if ($fromExt === $toExt) {
+                    $dir   = $this->makeTmpDir();
+                    copy($sPath, "$dir/$file");
+                } else {
+                    [$dir, $files] = $this->extractArchive($sPath);
+                    $this->createArchive($file, $files[0], $dir);
+                }
+                $files = [$file];
+            }
         }
+
+        if (!$is1F1Z) {
+            [$dir, $files] = $this->extractArchive($sPath);
+            if ($listFile = $this->makeListFile($dir, $dirName, $files, $options)) {
+                $files[] = $listFile;
+            }
+        }
+
         $hashFile = "hash_$sHash";
         touch("$dir/$hashFile");
         $files[] = $hashFile;
+
         foreach ($files as $file) {
             $dst = $this->dstPath . "/$topDir/$dirName/$file";
             $dstDir = dirname($dst);
@@ -445,6 +497,18 @@ class AdbSyncRetroArch extends AdbSync
             $this->log("[PUSH] $file");
         }
         $this->rmLocal($dir);
+    }
+
+    private function getNameFromList($dirName, $options): ?string
+    {
+        $name = $dirName;
+        if ($opt = ($options['cmd'] ?? false)) {
+            $name = $opt['title'][$dirName] ?? $dirName;
+        }
+        if ($opt = ($options['m3u'] ?? false)) {
+            $name = $opt['title'][$dirName] ?? $dirName;
+        }
+        return $name;
     }
 
     private function makeListFile($dir, $dirName, $files, $options): ?string
