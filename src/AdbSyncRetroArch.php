@@ -184,6 +184,8 @@ class AdbSyncRetroArch extends AdbSync
                         $i  = preg_match('/^([0-9A-Z\\p{Hiragana}])/u', $nk, $m) ? $m[1] : '_';
                         if (preg_match('/^[0-9]$/', $i)) {
                             $i = '0-9';
+                        } else {
+                            $i = $this->normalizeKana($i);
                         }
                         $az[$i][$k] = $v;
                     }
@@ -1084,5 +1086,17 @@ class AdbSyncRetroArch extends AdbSync
             }
         }
         return $list;
+    }
+
+    private function normalizeKana($str)
+    {
+        return strtr($str, [
+            'が' => 'か', 'ぎ' => 'き', 'ぐ' => 'く', 'げ' => 'け', 'ご' => 'こ',
+            'ざ' => 'さ', 'じ' => 'し', 'ず' => 'す', 'ぜ' => 'せ', 'ぞ' => 'そ',
+            'だ' => 'た', 'ぢ' => 'ち', 'づ' => 'つ', 'で' => 'て', 'ど' => 'と',
+            'ば' => 'は', 'び' => 'ひ', 'ぶ' => 'ふ', 'べ' => 'へ', 'ぼ' => 'ほ',
+            'ぱ' => 'は', 'ぴ' => 'ひ', 'ぷ' => 'ふ', 'ぺ' => 'へ', 'ぽ' => 'ほ',
+            'ゔ' => 'う', 'ヴ' => 'う',
+        ]);
     }
 }
