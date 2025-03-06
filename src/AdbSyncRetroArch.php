@@ -140,6 +140,8 @@ class AdbSyncRetroArch extends AdbSync
                     $options['m3u'] = ['title' => [], 'disks' => []];
                 } elseif (preg_match('/^1f1z(\\(.*\\))?$/', $i, $im)) {
                     $options['1f1z'] = strtolower(trim($im[1] ?? 'zip', '()'));
+                } elseif (preg_match('/^index(\\(.*\\))?$/', $i, $im)) {
+                    $options['index'] = (int)trim($im[1] ?? 1, '()');
                 } else {
                     $options[$i] = true;
                 }
@@ -177,12 +179,13 @@ class AdbSyncRetroArch extends AdbSync
                 $mode    = $options['mode'] === 'full' ? self::LIST_HASH : self::LIST_NONE;
                 $srcList = $this->listLocal($this->srcPath . "/$dir", $mode);
                 $srcList = $this->filterSrcList($srcList, $options);
-                if ($options['index'] ?? false) {
+                if ($index = ($options['index'] ?? false)) {
                     $az = [];
                     foreach ($srcList as $k => $v) {
                         $nk = strtoupper(mb_convert_kana($k, 'aHc'));
-                        $i  = preg_match('/^([0-9A-Z\\p{Hiragana}])/u', $nk, $m) ? $m[1] : '_';
-                        if (preg_match('/^[0-9]$/', $i)) {
+                        $pt = sprintf('/^([0-9A-Z\\p{Hiragana}]{1,%d})/u', $index);
+                        $i  = preg_match($pt, $nk, $m) ? $m[1] : '_';
+                        if (preg_match('/^[0-9]/', $i)) {
                             $i = '0-9';
                         } else {
                             $i = $this->normalizeKana($i);
