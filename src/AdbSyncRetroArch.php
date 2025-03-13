@@ -48,10 +48,10 @@ class AdbSyncRetroArch extends AdbSync
             'sizeParser' => '/(?<size>\\d+)\\s+(?<num>\\d+)\\s+files?/',
         ],
         '7z'  => [
-            'c' => '7z a -mx=9 %TO% %FROM%',
-            'x' => '7z e',
-            'l' => '7z l',
-            'n' => '7z l -ba',
+            'c' => '7z a -mmt -mx=9 %TO% %FROM%',
+            'x' => '7z e -mmt',
+            'l' => '7z l -mmt',
+            'n' => '7z l -mmt -ba',
             'sizeParser' => '/(?<size>\\d+)\\s+\\d+\\s+(?<num>\\d+)\\s+files?/',
         ],
         'cso' => [
