@@ -289,6 +289,9 @@ class AdbSyncRetroArch extends AdbSync
                             $cloneFile = "$clone.$ext";
                             if (array_key_exists($cloneFile, $srcList)) {
                                 $this->log("[CLONE:SKIP] $cloneFile -> $file");
+                            } elseif (array_key_exists($cloneFile, $dstList)) {
+                                $this->log("[CLONE:EXISTS] $cloneFile -> $file");
+                                unset($dstList[$cloneFile]);
                             } else {
                                 $dst = $this->dstPath . "/$topDir/$cloneFile";
                                 $this->rmRemote($dst);
