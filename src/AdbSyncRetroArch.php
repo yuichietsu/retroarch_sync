@@ -308,7 +308,7 @@ class AdbSyncRetroArch extends AdbSync
     }
 
 
-    protected function syncFiles(string $topDir, array $sData): void
+    protected function syncFiles(string $topDir, array $sData): bool
     {
         foreach ($sData as $data) {
             [$src, $file] = $data;
@@ -320,6 +320,7 @@ class AdbSyncRetroArch extends AdbSync
             $this->push($src, $dst);
             $this->log("[PUSH] $file");
         }
+        return true;
     }
 
     private function makeTmpDir(): string
@@ -384,19 +385,19 @@ class AdbSyncRetroArch extends AdbSync
         return (int)$last;
     }
 
-    private function sync7zToZip(string $topDir, array $sData, string $dirName): void
+    private function sync7zToZip(string $topDir, array $sData, string $dirName): bool
     {
-        $this->syncArcToArc($topDir, $sData, $dirName, 'zip');
+        return $this->syncArcToArc($topDir, $sData, $dirName, 'zip');
     }
 
-    private function syncArcToCso(string $topDir, array $sData, string $dirName): void
+    private function syncArcToCso(string $topDir, array $sData, string $dirName): bool
     {
-        $this->syncArcToArc($topDir, $sData, $dirName, 'cso');
+        return $this->syncArcToArc($topDir, $sData, $dirName, 'cso');
     }
 
-    private function syncArcToChd(string $topDir, array $sData, string $dirName): void
+    private function syncArcToChd(string $topDir, array $sData, string $dirName): bool
     {
-        $this->syncArcToArc($topDir, $sData, $dirName, 'chd');
+        return $this->syncArcToArc($topDir, $sData, $dirName, 'chd');
     }
 
     private function createArchive(string $to, string|array $from, string $dir): void
@@ -425,46 +426,100 @@ class AdbSyncRetroArch extends AdbSync
         }
     }
 
-    protected function syncArcToArc(string $topDir, array $sData, string $dirName, string $to): void
+    private function syncDistilledArc(string $topDir, array $sData, string $dirName, array $options): bool
     {
-        [$fileInfo]    = $sData;
-        [$src]         = $fileInfo;
-        [$dir, $files] = $this->extractArchive($src, $to);
-        $hash          = $this->getFileHash($fileInfo);
-        $hashFile      = "hash_$hash";
-        touch("$dir/$hashFile");
-
-        $archiver = $this->archivers[$to];
-        if ($iFilter = $archiver['inputFilter'] ?? null) {
-            $newFiles = [];
-            foreach ($files as $file) {
-                if (preg_match($iFilter, $file)) {
-                    $newFiles[] = $file;
-                    break;
-                }
-            }
-            $files = $newFiles ?: $files;
-        }
-
-        $this->createArchive("$dirName.$to", $files, $dir);
-
-        $files = [
-            "$dirName.$to",
-            $hashFile,
-        ];
-        foreach ($files as $file) {
-            $dst = $this->dstPath . "/$topDir/$dirName/$file";
-            $dstDir = dirname($dst);
-            if ($dstDir !== $this->dstPath . "/$topDir") {
-                $this->mkdirRemote($dstDir);
-            }
-            $this->push("$dir/$file", $dst);
-            $this->log("[PUSH] $file");
-        }
-        $this->rmLocal($dir);
+        return $this->syncArcToArc($topDir, $sData, $dirName, 'distill', $options);
     }
 
-    private function syncArchiveFiles(string $topDir, array $sData, string $dirName, array $options): void
+    protected function syncArcToArc(
+        string $topDir,
+        array $sData,
+        string $dirName,
+        string $to,
+        ?array $options = null
+    ): bool {
+        [$fileInfo]    = $sData;
+        [$src]         = $fileInfo;
+        $distill       = $to === 'distill';
+        if ($distill) {
+            $from = $this->getSupportedArchiveExtension($src);
+            $to   = $from;
+        }
+        [$dir, $files] = $this->extractArchive($src, $to);
+        try {
+            $hash     = $this->getFileHash($fileInfo);
+            $hashFile = "hash_$hash";
+            touch("$dir/$hashFile");
+
+            $archiver = $this->archivers[$to];
+            if ($iFilter = $archiver['inputFilter'] ?? null) {
+                $newFiles = [];
+                foreach ($files as $file) {
+                    if (preg_match($iFilter, $file)) {
+                        $newFiles[] = $file;
+                        break;
+                    }
+                }
+                $files = $newFiles ?: $files;
+            }
+
+            $pushZip   = true;
+            $pushFiles = [$hashFile];
+
+            if ($distill) {
+                $distiller = $options['distill'][$dirName] ?? null;
+                if ($distiller) {
+                    $newFiles = [];
+                    foreach ($distiller as $file => [$size, $crc]) {
+                        $path = "$dir/$file";
+                        if (file_exists($path)) {
+                            $s = filesize($path);
+                            $c = strtolower(hash_file('crc32b', $path));
+                            if ($s === $size && $c === $crc) {
+                                $newFiles[] = $file;
+                            } else {
+                                echo "[DISTILL] incorrect ROM: $file ($s,$c) != ($size,$crc)\n";
+                                $pushZip = false;
+                                break;
+                            }
+                        } else {
+                            echo "[DISTILL] ROM not found: $file\n";
+                            $pushZip = false;
+                            break;
+                        }
+                    }
+                    if ($pushZip) {
+                        printf("[DISTILL] ROM files: %d => %d\n", count($files), count($newFiles));
+                        $files = $newFiles;
+                    }
+                } else {
+                    echo "[DISTILL] ROM Info not found\n";
+                    $pushZip = false;
+                }
+            }
+
+            if ($pushZip) {
+                $zip = "$dirName.$to";
+                $this->createArchive($zip, $files, $dir);
+                $pushFiles[] = $zip;
+            }
+
+            foreach ($pushFiles as $file) {
+                $dst = $this->dstPath . "/$topDir/$dirName/$file";
+                $dstDir = dirname($dst);
+                if ($dstDir !== $this->dstPath . "/$topDir") {
+                    $this->mkdirRemote($dstDir);
+                }
+                $this->push("$dir/$file", $dst);
+                $this->log("[PUSH] $file");
+            }
+            return true;
+        } finally {
+            $this->rmLocal($dir);
+        }
+    }
+
+    private function syncArchiveFiles(string $topDir, array $sData, string $dirName, array $options): bool
     {
         [$sFileInfo]         = $sData;
         $sPath = $sFileInfo[self::IDX_PATH];
@@ -509,6 +564,8 @@ class AdbSyncRetroArch extends AdbSync
             $this->log("[PUSH] $file");
         }
         $this->rmLocal($dir);
+
+        return true;
     }
 
     private function getNameFromList($dirName, $options): ?string
@@ -594,6 +651,7 @@ class AdbSyncRetroArch extends AdbSync
         $chd = $options['chd'] ?? false;
         $zip = $options['zip'] ?? false;
         $ext = $options['ext'] ?? false;
+        $dst = $options['distill'] ?? false;
         $c = ['n' => 0, 'u' => 0, 'd' => 0, 's' => 0];
         foreach ($srcList as $sKey => $sData) {
             if ($zip && $this->isFileType($sData, '7z')) {
@@ -608,6 +666,10 @@ class AdbSyncRetroArch extends AdbSync
                 $dKey = $this->trimArchiveExtension($sKey);
                 $comp = $this->compareHashFile(...);
                 $sync = $this->syncArcToChd(...);
+            } elseif ($dst && $this->isFileType($sData, ['7z', 'zip'])) {
+                $dKey = $this->trimArchiveExtension($sKey);
+                $comp = $this->compareHashFile(...);
+                $sync = $this->syncDistilledArc(...);
             } elseif ($ext && $this->isExtractable($sData)) {
                 $dKey = $this->trimArchiveExtension($sKey);
                 $comp = $this->compareHashFile(...);
@@ -626,13 +688,11 @@ class AdbSyncRetroArch extends AdbSync
                 } else {
                     $this->log("[UP] $sKey => $dKey");
                     $this->rmRemote($this->dstPath . "/$topDir/$dKey");
-                    $sync($topDir, $sData, $dKey, $options);
-                    $c['u']++;
+                    $sync($topDir, $sData, $dKey, $options) && $c['u']++;
                 }
             } else {
                 $this->log("[NEW] $sKey => $dKey");
-                $sync($topDir, $sData, $dKey, $options);
-                $c['n']++;
+                $sync($topDir, $sData, $dKey, $options) && $c['n']++;
             }
             unset($dstList[$dKey]);
         }
