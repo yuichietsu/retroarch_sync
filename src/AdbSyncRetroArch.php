@@ -491,7 +491,10 @@ class AdbSyncRetroArch extends AdbSync
                             break;
                         }
                     }
-                    if ($pushZip) {
+                    if (count($newFiles) === 0) {
+                        echo "[DISTILL] All ROMs missing\n";
+                        $pushZip = false;
+                    } elseif ($pushZip) {
                         printf("[DISTILL] ROM files: %d => %d\n", count($files), count($newFiles));
                         $files = $newFiles;
                     }
