@@ -467,7 +467,6 @@ class AdbSyncRetroArch extends AdbSync
             }
 
             $pushZip   = true;
-            $pushFiles = [$hashFile];
 
             if ($distill) {
                 $distiller = $options['distill'][$dirName] ?? null;
@@ -504,6 +503,7 @@ class AdbSyncRetroArch extends AdbSync
                 }
             }
 
+            $pushFiles = [];
             if ($pushZip) {
                 $zip = "$dirName.$to";
                 if ($distill) {
@@ -513,6 +513,7 @@ class AdbSyncRetroArch extends AdbSync
                 $this->createArchive($zip, $files, $dir);
                 $pushFiles[] = $zip;
             }
+            $pushFiles[] = $hashFile;
 
             foreach ($pushFiles as $file) {
                 $dst = $this->dstPath . "/$topDir/$dirName/$file";
