@@ -194,7 +194,7 @@ class AdbSyncRetroArch extends AdbSync
                     }
                     foreach ($az as $i => $srcList) {
                         $this->log("[INDEX] $i");
-                        $this->syncDir("$dstDir/$i", $srcList, $options, $mode);
+                        $this->syncDir("$dstDir/$i", $srcList, $options);
                     }
                     $this->log("[CLEAN]");
                     $children = $this->listChildrenRemote($this->dstPath . "/$dstDir");
@@ -207,7 +207,7 @@ class AdbSyncRetroArch extends AdbSync
                         }
                     }
                 } else {
-                    $this->syncDir($dstDir, $srcList, $options, $mode);
+                    $this->syncDir($dstDir, $srcList, $options);
                 }
             } else {
                 $this->verbose && $this->log("[SKIP] $dir");
@@ -215,10 +215,10 @@ class AdbSyncRetroArch extends AdbSync
         }
     }
 
-    protected function syncDir(string $dir, array $srcList, array $options, int $mode): void
+    protected function syncDir(string $dir, array $srcList, array $options): void
     {
         $this->mkdirRemote($this->dstPath . "/$dir");
-        $dstList = $this->listRemote($this->dstPath . "/$dir", $mode);
+        $dstList = $this->listRemote($this->dstPath . "/$dir", self::LIST_NONE);
         $this->syncCore($dir, $srcList, $dstList, $options);
     }
 
@@ -503,6 +503,10 @@ class AdbSyncRetroArch extends AdbSync
 
             if ($pushZip) {
                 $zip = "$dirName.$to";
+                if ($distill) {
+                    mkdir("$dir/rom", 0777);
+                    $zip = "rom/$zip";
+                }
                 $this->createArchive($zip, $files, $dir);
                 $pushFiles[] = $zip;
             }
