@@ -442,8 +442,11 @@ class AdbSyncRetroArch extends AdbSync
         [$src]         = $fileInfo;
         $distill       = $to === 'distill';
         if ($distill) {
-            $from = $this->getSupportedArchiveExtension($src);
-            $to   = $from;
+            if ($options['zip'] ?? false) {
+                $to = 'zip';
+            } else {
+                $to = $this->getSupportedArchiveExtension($src);
+            }
         }
         [$dir, $files] = $this->extractArchive($src, $to);
         try {
@@ -654,7 +657,11 @@ class AdbSyncRetroArch extends AdbSync
         $dst = $options['distill'] ?? false;
         $c = ['n' => 0, 'u' => 0, 'd' => 0, 's' => 0];
         foreach ($srcList as $sKey => $sData) {
-            if ($zip && $this->isFileType($sData, '7z')) {
+            if ($dst && $this->isFileType($sData, ['7z', 'zip'])) {
+                $dKey = $this->trimArchiveExtension($sKey);
+                $comp = $this->compareHashFile(...);
+                $sync = $this->syncDistilledArc(...);
+            } elseif ($zip && $this->isFileType($sData, '7z')) {
                 $dKey = $this->trimArchiveExtension($sKey);
                 $comp = $this->compareHashFile(...);
                 $sync = $this->sync7zToZip(...);
@@ -666,10 +673,6 @@ class AdbSyncRetroArch extends AdbSync
                 $dKey = $this->trimArchiveExtension($sKey);
                 $comp = $this->compareHashFile(...);
                 $sync = $this->syncArcToChd(...);
-            } elseif ($dst && $this->isFileType($sData, ['7z', 'zip'])) {
-                $dKey = $this->trimArchiveExtension($sKey);
-                $comp = $this->compareHashFile(...);
-                $sync = $this->syncDistilledArc(...);
             } elseif ($ext && $this->isExtractable($sData)) {
                 $dKey = $this->trimArchiveExtension($sKey);
                 $comp = $this->compareHashFile(...);
