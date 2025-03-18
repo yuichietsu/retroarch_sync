@@ -49,7 +49,7 @@ class AdbSyncRetroArch extends AdbSync
         ],
         '7z'  => [
             'c' => '7z a -mmt -mx=9 %TO% %FROM%',
-            'x' => '7z e -mmt',
+            'x' => '7z x -mmt',
             'l' => '7z l -mmt',
             'n' => '7z l -mmt -ba',
             'sizeParser' => '/(?<size>\\d+)\\s+\\d+\\s+(?<num>\\d+)\\s+files?/',
