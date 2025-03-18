@@ -406,9 +406,9 @@ class AdbSyncRetroArch extends AdbSync
         $exe = $archiver['c'];
 
         if (is_string($from)) {
-            $from = escapeshellarg($from);
+            $from = escapeshellarg("./$from");
         } else {
-            $from = implode(' ', array_map('escapeshellarg', $from));
+            $from = implode(' ', array_map(fn ($v) => escapeshellarg("./$v"), $from));
         }
 
         $cmd = str_replace(
