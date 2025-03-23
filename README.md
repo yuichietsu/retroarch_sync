@@ -3,10 +3,10 @@
 RetroArchのためにPCからFire TV Stickにゲームを転送するためのスクリプトです。   
 次のような問題点を解決するためのスクリプトです。
 
-- 手動でゲームをコピーするのは面倒くさい
-- PCのディレクトリをsmabaでマウントできなさそう
-- rsyncは使えなさそう
-- Fire TV StickのストレージにはPCに保存している全部のゲームは入らない
+- 手動でゲームをコピーするのは面倒くさいです
+- PCのディレクトリをsmabaでマウントできなさそうです
+- rsyncは使えなさそうです
+- Fire TV StickのストレージにはPCに保存している全部のゲームは入りません
 
 スクリプト内部では`rm -rf`などのコマンドを使うのでシステムを破壊する可能性があります。  
 特にゲームを格納するコンテンツディレクトリは同期のたびにファイルを削除するため、設定ファイルやセーブファイルなどを保存しないようにしてください。
@@ -21,10 +21,10 @@ RetroArchのためにPCからFire TV Stickにゲームを転送するための�
 - find
 - rm
 - zip (オプション)
-  - PCのzipを展開してから転送したい場合に必要です(FDDとかCD系は展開してないとうまく動かない)
-  - PCの7zをzipに変換して転送したい場合に必要です(Lemuroidがzipのみサポートしているので実装してみた)
+  - PCのzipを展開してから転送したい場合に必要です(FDDとかCD系は展開してないとうまく動きません)
+  - PCの7zをzipに変換して転送したい場合に必要です(Lemuroidがzipのみサポートしているので実装してみました)
 - 7z (オプション)
-  - PCの7zを展開してから転送したい場合に必要です(FDDとかCD系は展開してないとうまく動かない)
+  - PCの7zを展開してから転送したい場合に必要です(FDDとかCD系は展開してないとうまく動きません)
 - chdman (オプション)
   - cue/gdiなどのディスクイメージをchdに変換して転送する場合に必要です
 - ciso (オプション)
@@ -34,8 +34,8 @@ RetroArchのためにPCからFire TV Stickにゲームを転送するための�
 
 ### 転送先(Fire TV Stick)
 
-- 開発者オプションが有効になっている
-- 転送元のPCを接続を許可する
+- 開発者オプションが有効になっています
+- 転送元のPCを接続を許可しています
 
 ## 使用方法
 
@@ -46,7 +46,7 @@ $sync = new \Menrui\AdbSyncRetroArch(
     '192.168.11.44:5555',   // Fire TV Stick
 );
 
-$sync->srcPath = '/mnt/d/files/roms/rebuild';                                // PCの転送元のディレクトリ、サブディレクトリにmame/とかnes/とかある
+$sync->srcPath = '/mnt/d/files/roms/rebuild';                                // PCの転送元のディレクトリ、サブディレクトリにmame/とかnes/とかあります
 $sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM';  // Fire TV Stickの転送先のディレクトリ
 $sync->statesPaths = [                                                       // セーブデータの保存先
     '/storage/B42F-0FFA/RetroArch/states',
@@ -57,9 +57,9 @@ $sync->favoritesPaths = [                                                   // �
 
 $sync->syncGames(
     [
-        'mame'          => 'rand:4g,lock',       // 4GBを超えない範囲でランダムに選び出して送る。セーブしたゲームは削除しない
-        'nes'           => 'full:1g1r,excl(BIOS)', // 1G1Rで全部送る。BIOSは除外
-        'psx'           => 'rand:4g,chd,disks',   // 4GBを超えない範囲でchdに変換してランダムで送る。複数枚のディスクはまとめて送る
+        'mame'          => 'rand:4g,lock',       // 4GBを超えない範囲でランダムに選び出して送ります。セーブしたゲームは削除しません
+        'nes'           => 'full:1g1r,excl(BIOS)', // 1G1Rで全部送ります。BIOSは除外します
+        'psx'           => 'rand:4g,chd,disks',   // 4GBを超えない範囲でchdに変換してランダムで送ります。複数枚のディスクはまとめて送ります
     ],
 );
 ```
@@ -75,10 +75,10 @@ $sync->syncGames(
 転送先のFire TV Stickのディレクトリ(必須)
 
 #### statesPaths : array
-Fire TV StickのRetroArchのstateファイルの保存先のディレクトリ。セーブしたゲームはFire TV Stickから削除しないようにロックする判定に使用します。
+Fire TV StickのRetroArchのstateファイルの保存先のディレクトリです。セーブしたゲームはFire TV Stickから削除しないようにロックする判定に使用します。
 
 #### favoritesPaths : array
-Fire TV StickのRetroArchのお気に入りファイルの保存先。お気に入りに登録したゲームはFire TV Stickから削除しないようにロックする判定に使用します。
+Fire TV StickのRetroArchのお気に入りファイルの保存先です。お気に入りに登録したゲームはFire TV Stickから削除しないようにロックする判定に使用します。
 
 #### lockDays : int
 セーブしたゲームをFire TV Stickから削除しない日数(デフォルト14)
@@ -157,12 +157,12 @@ adbのコマンドの再試行をする前に待機する秒数(デフォルト6
 #### 転送モード
 
 ##### full
-PCのゲームを全て転送するモード  
+PCのゲームを全て転送するモードです。  
 PCにないゲームはFire TV Stickから削除されます。  
 指定可能なオプション: ext, lock, zip, excl, incl, 1g1r, index, rename, official, list, disks, cmd, m3u, deps, clones, cso, chd
 
 ##### rand
-PCのゲームをランダムで選出して転送するモード  
+PCのゲームをランダムで選出して転送するモードです。  
 ランダムで選ばれた以外のゲームはFire TV Stickから削除されます。  
 指定可能なオプション: ((ゲーム数)または(サイズ)), ext, lock, zip, excl, incl, 1g1r, index, rename, official, list, disks, cmd, m3u, deps, clones, cso, chd, 1f1z
 
@@ -173,7 +173,7 @@ randモードの場合に、転送するゲーム数またはファイルの総�
 数字だけの場合はゲーム数、単位（k, m, g）をつけた場合はサイズとして扱われます。
 
 ##### lock
-通常、転送対象ではないゲームはFire TV Stickから削除されるが、ステートセーブしたゲームとお気に入りに登録したゲームは削除しないようにします。  
+通常、転送対象ではないゲームはFire TV Stickから削除されますが、ステートセーブしたゲームとお気に入りに登録したゲームは削除しないようにします。  
 デフォルトでセーブしてから14日間保護します。
 
 ##### 圧縮関連オプション
@@ -299,9 +299,9 @@ $options['m3u'] => [
 ```
 
 ###### disks
-転送後にファイル名から推測してm3uを自動で生成する。
-randモードの場合、送信元のファイル名から複数枚で構成されるゲームはまとめて送信する。  
-まとめた結果randで指定した数やサイズを超えることがある。  
+転送後にファイル名から推測してm3uを自動で生成します。
+randモードの場合、送信元のファイル名から複数枚で構成されるゲームはまとめて送信します。  
+まとめた結果randで指定した数やサイズを超えることがあります。  
 
 ## 免責
 
