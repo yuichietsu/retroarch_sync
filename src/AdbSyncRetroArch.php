@@ -29,6 +29,7 @@ class AdbSyncRetroArch extends AdbSync
         'china',
         'korea',
         'japan',
+        'asia',
         'world',
         'us',
         'eu',
@@ -37,6 +38,7 @@ class AdbSyncRetroArch extends AdbSync
         'ko',
         'zh',
         'cn',
+        'as',
     ];
 
     public array $archivers = [
@@ -130,7 +132,7 @@ class AdbSyncRetroArch extends AdbSync
                 } elseif (preg_match('/^1g1r(\\(.*\\))?$/', $i, $im)) {
                     $options['1g1r'] = explode(
                         '|',
-                        strtolower(trim($im[1] ?? 'japan|jp|asia|world|usa|us|europe|eu', '()'))
+                        strtolower(trim($im[1] ?? 'japan|jp|world|usa|us|europe|eu|asia|as', '()'))
                     );
                 } elseif (preg_match('/^rename(\\(.*\\))$/', $i, $im)) {
                     $options['rename'] = trim($im[1], '()/');
