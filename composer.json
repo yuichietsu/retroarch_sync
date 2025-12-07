@@ -6,7 +6,7 @@
     "require": {
         "menrui/menrui": "*",
         "menrui/ccd2cue": "*",
-        "menrui/adb_sync": ">=0.1.2"
+        "menrui/adb_sync": ">=0.1.5"
     },
     "scripts": {},
     "autoload": {

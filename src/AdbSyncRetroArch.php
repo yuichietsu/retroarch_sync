@@ -744,14 +744,16 @@ class AdbSyncRetroArch extends AdbSync
         $locks = [];
         $pattern = preg_quote(rtrim($this->dstPath, '/'), '%');
         foreach ($this->favoritesPaths as $fPath) {
-            $data = $this->catRemote($fPath);
-            if ($json = @json_decode($data, true)) {
-                foreach ($json['items'] as $item) {
-                    if (preg_match("%^{$pattern}/([^/]+)/(.+)$%", $item['path'], $m)) {
-                        $dir  = $m[1];
-                        $game = preg_replace('%[\\./].+$%', '', $m[2]);
-                        $locks['*'][$game]  = true;
-                        $locks[$dir][$game] = true;
+            if ($this->existsRemote($fPath)) {
+                $data = $this->catRemote($fPath);
+                if ($json = @json_decode($data, true)) {
+                    foreach ($json['items'] as $item) {
+                        if (preg_match("%^{$pattern}/([^/]+)/(.+)$%", $item['path'], $m)) {
+                            $dir  = $m[1];
+                            $game = preg_replace('%[\\./].+$%', '', $m[2]);
+                            $locks['*'][$game]  = true;
+                            $locks[$dir][$game] = true;
+                        }
                     }
                 }
             }
