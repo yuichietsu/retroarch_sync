@@ -62,6 +62,122 @@ $sync->syncGames(
 );
 ```
 
+## 転送内容の具体例
+
+### 例1: `'nes' => 'full:index,1g1r,excl(BIOS)'`
+
+**転送元 (PC):**
+```
+/mnt/d/files/roms/rebuild/nes/
+├── BIOS.zip
+├── 1942.zip
+├── Super Mario Bros. (USA).zip
+├── Super Mario Bros. (Japan).zip
+├── Pac-Man (USA).zip
+├── Pac-Man (Europe).zip
+└── Pac-Man (Japan).zip
+```
+
+**処理:**
+1. `excl(BIOS)` : BIOS.zip を除外
+2. `1g1r` : 複数バージョンから1つを選出（日本版を優先）
+   - 1942.zip はバージョン1つ
+   - Super Mario Bros. (Japan).zip を採用
+   - Pac-Man (Japan).zip を採用
+3. `index` : ファイル名の最初の1文字でインデックス化
+
+**転送先 (Fire TV Stick):**
+```
+/storage/B42F-0FFA/RetroArch/ROM/nes/
+├── 0-9/
+│   └── 1942.zip
+├── P/
+│   └── Pac-Man (Japan).zip
+└── S/
+    └── Super Mario Bros. (Japan).zip
+```
+
+### 例2: `'psx' => 'rand:4g,chd,disks'`
+
+**転送元 (PC):**
+```
+/mnt/d/files/roms/rebuild/psx/
+├── Final Fantasy VII (Disk 1 of 3).7z        (各600MB程度)
+├── Final Fantasy VII (Disk 2 of 3).7z
+├── Final Fantasy VII (Disk 3 of 3).7z
+├── Metal Gear Solid.7z                       (1.2GB、単一ディスク)
+├── Resident Evil (Disk 1 of 3).7z            (各300MB程度)
+├── Resident Evil (Disk 2 of 3).7z
+├── Resident Evil (Disk 3 of 3).7z
+└── Chrono Cross.7z                           (1.5GB、単一ディスク)
+```
+
+**処理:**
+1. `rand:4g` : 合計容量4GB以内でランダムに選出
+   - disks オプション有効時：複数ディスクで構成されるゲーム（ファイル名に「(Disk n of m)」パターンを持つ）は一括でカウント
+   - Final Fantasy VII (3ファイル、1.8GB) 、Metal Gear Solid (1ファイル、1.2GB) 、Resident Evil (3ファイル、0.9GB) を選出 → 合計3.9GB
+   - Chrono Cross (1ファイル、1.5GB) は容量超過のため除外
+2. `chd` : 7zを展開してcue/binをCHD形式に変換（圧縮率向上）
+3. `disks` : 複数ディスクで構成されるゲーム（ファイル名に「(Disk n of m)」パターンを持つ）のみ、ゲーム名ごとにm3uファイルを自動生成。単一ディスクゲームではm3uは生成しない
+
+**転送先 (Fire TV Stick):**
+```
+/storage/B42F-0FFA/RetroArch/ROM/psx/
+├── Final Fantasy VII (Disk 1 of 3)/
+│   ├── Final Fantasy VII (Disk 1 of 3).chd
+│   └── hash_XXXXXXXXXXXXXXXX                 (転送元ファイルのハッシュ値、再転送判定に使用)
+├── Final Fantasy VII (Disk 2 of 3)/
+│   ├── Final Fantasy VII (Disk 2 of 3).chd
+│   └── hash_XXXXXXXXXXXXXXXX
+├── Final Fantasy VII (Disk 3 of 3)/
+│   ├── Final Fantasy VII (Disk 3 of 3).chd
+│   └── hash_XXXXXXXXXXXXXXXX
+├── Metal Gear Solid/
+│   ├── Metal Gear Solid.chd
+│   └── hash_XXXXXXXXXXXXXXXX
+├── Resident Evil (Disk 1 of 3)/
+│   ├── Resident Evil (Disk 1 of 3).chd
+│   └── hash_XXXXXXXXXXXXXXXX
+├── Resident Evil (Disk 2 of 3)/
+│   ├── Resident Evil (Disk 2 of 3).chd
+│   └── hash_XXXXXXXXXXXXXXXX
+├── Resident Evil (Disk 3 of 3)/
+│   ├── Resident Evil (Disk 3 of 3).chd
+│   └── hash_XXXXXXXXXXXXXXXX
+├── Final Fantasy VII.m3u                     (自動生成、複数ディスクを統合)
+└── Resident Evil.m3u                         (自動生成、複数ディスクを統合)
+```
+
+### 例3: `'c64' => 'full:1g1r,excl(BIOS),rename(c64/games)'`
+
+**転送元 (PC):**
+```
+/mnt/d/files/roms/rebuild/c64/
+├── c64 BIOS (1982).zip
+├── Boulder Dash (1984)(USA).zip
+├── Boulder Dash (1984)(Japan).zip
+├── Boulder Dash (1984)(Europe).zip
+├── Pac-Man (1983)(USA).zip
+├── Pac-Man (1983)(Japan).zip
+└── Galaga (1983)(USA).zip
+```
+
+**処理:**
+1. `excl(BIOS)` : c64 BIOS (1982).zip を除外
+2. `1g1r` : 複数バージョンから1つを選出（日本版を優先）
+   - Boulder Dash (1984)(Japan).zip を採用
+   - Pac-Man (1983)(Japan).zip を採用
+   - Galaga (1983)(USA).zip はバージョン1つ
+3. `rename(c64/games)` : 転送先ディレクトリを c64/games に変更
+
+**転送先 (Fire TV Stick):**
+```
+/storage/B42F-0FFA/RetroArch/ROM/c64/games/
+├── Boulder Dash (1984)(Japan).zip
+├── Pac-Man (1983)(Japan).zip
+└── Galaga (1983)(USA).zip
+```
+
 ## 設定
 
 ### `\Menrui\AdbSyncRetroArch` のメンバプロパティ
