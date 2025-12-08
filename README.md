@@ -41,23 +41,23 @@ RetroArchのためにPCからFire TV Stickにゲームを転送するスクリ�
 
 ```php
 $sync = new \Menrui\AdbSyncRetroArch(
-    '192.168.11.44:5555',   // Fire TV Stick
+    '192.168.11.44:5555',   // Fire TV StickのIPアドレス:ポート
 );
 
-$sync->srcPath = '/mnt/d/files/roms/rebuild';                                // PCの転送元ディレクトリ（サブディレクトリに mame/、nes/ など）
-$sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM';  // Fire TV Stickの転送先ディレクトリ
-$sync->statesPaths = [                                                       // セーブデータの保存先
+$sync->srcPath = '/mnt/d/files/roms/rebuild';                                // PC上の転送元ルートディレクトリ
+$sync->dstPath = '/storage/B42F-0FFA/Android/data/com.retroarch/files/ROM';  // Fire TV Stick上の転送先ルートディレクトリ
+$sync->statesPaths = [                                                       // セーブファイル(state)の保存先（削除ロック判定に使用）
     '/storage/B42F-0FFA/RetroArch/states',
 ];
-$sync->favoritesPaths = [                                                   // お気に入りの保存先
+$sync->favoritesPaths = [                                                    // お気に入り(lpl)ファイルの保存先（削除ロック判定に使用）
     '/storage/B42F-0FFA/RetroArch/content_favorites.lpl',
 ];
 
 $sync->syncGames(
     [
-        'mame'          => 'rand:4g,lock',       // 4GB以内でランダムに選出して転送。セーブ済みゲームは保持
-        'nes'           => 'full:1g1r,excl(BIOS)', // 1G1Rで全て転送。BIOSは除外
-        'psx'           => 'rand:4g,chd,disks',   // 4GB以内でchdに変換して転送。複数ディスクは一括
+        'mame'          => 'rand:4g,lock',         // ランダム選出(4GB以内)、セーブ済みは保護
+        'nes'           => 'full:1g1r,excl(BIOS)', // 全て転送、1G1R選出、BIOS除外
+        'psx'           => 'rand:4g,chd,disks',    // ランダム選出(4GB以内)、CHD変換、複数ディスク対応
     ],
 );
 ```
